@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { env } from "@/lib/env";
 import { friendlyAdminError, type AdminAction } from "@/lib/admin-errors";
+import { logger } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CreateEventForm } from "./create-event-form";
@@ -68,6 +69,7 @@ export function AdminDashboard({
   const [leaderboard, setLeaderboard] = useState(initialLeaderboard);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [realtimeIssue, setRealtimeIssue] = useState(false);
 
   const refresh = useCallback(async () => {
     const { data: liveEvent } = await supabase
@@ -136,7 +138,20 @@ export function AdminDashboard({
       .on("postgres_changes", { event: "*", schema: "public", table: "votes" }, () => {
         void refresh();
       })
-      .subscribe();
+      .subscribe((subStatus) => {
+        const isIssue =
+          subStatus === "CHANNEL_ERROR" || subStatus === "TIMED_OUT" || subStatus === "CLOSED";
+        setRealtimeIssue(isIssue);
+        if (isIssue) {
+          logger.realtimeStatus({ app: "admin", status: subStatus });
+        }
+        // Same reasoning as the audience app: re-fetch on every
+        // (re)connect, since a missed change during a disconnect is
+        // never replayed and realtime is sync, not the source of truth.
+        if (subStatus === "SUBSCRIBED") {
+          void refresh();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -167,6 +182,7 @@ export function AdminDashboard({
     setBusy(false);
     if (error) {
       setErrorMessage(friendlyAdminError(action, error.message));
+      logger.adminActionFailed({ action, code: error.message });
       return;
     }
     await refresh();
@@ -181,6 +197,7 @@ export function AdminDashboard({
       .single();
     if (error || !data) {
       setErrorMessage(friendlyAdminError("createEvent", error?.message));
+      logger.adminActionFailed({ action: "createEvent", code: error?.message });
       return;
     }
     setEvent(data);
@@ -199,6 +216,7 @@ export function AdminDashboard({
     });
     if (error) {
       setErrorMessage(friendlyAdminError("addParticipant", error.message));
+      logger.adminActionFailed({ action: "addParticipant", code: error.message });
       return;
     }
     await refresh();
@@ -215,6 +233,7 @@ export function AdminDashboard({
       .eq("id", id);
     if (error) {
       setErrorMessage(friendlyAdminError("editParticipant", error.message));
+      logger.adminActionFailed({ action: "editParticipant", code: error.message });
       return;
     }
     await refresh();
@@ -247,7 +266,7 @@ export function AdminDashboard({
   if (!event) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-10">
-        <DashboardHeader onLogout={handleLogout} />
+        <DashboardHeader onLogout={handleLogout} realtimeIssue={realtimeIssue} />
         <CreateEventForm onCreate={handleCreateEvent} />
       </div>
     );
@@ -266,7 +285,7 @@ export function AdminDashboard({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <DashboardHeader onLogout={handleLogout} />
+      <DashboardHeader onLogout={handleLogout} realtimeIssue={realtimeIssue} />
 
       {errorMessage && (
         <p
@@ -390,12 +409,23 @@ export function AdminDashboard({
   );
 }
 
-function DashboardHeader({ onLogout }: { onLogout: () => void }) {
+function DashboardHeader({
+  onLogout,
+  realtimeIssue,
+}: {
+  onLogout: () => void;
+  realtimeIssue: boolean;
+}) {
   return (
     <header className="flex items-center justify-between border-b-4 border-foreground pb-4">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.3em]">Literary Club</p>
         <h1 className="text-lg font-black uppercase tracking-tight">Live Voting — Admin</h1>
+        {realtimeIssue && (
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Reconnecting…
+          </p>
+        )}
       </div>
       <button
         type="button"

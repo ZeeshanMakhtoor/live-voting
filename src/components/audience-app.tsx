@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getVoterId } from "@/lib/voter-id";
 import { hasVotedFor, markVotedFor } from "@/lib/voted-store";
 import { friendlyVoteError, isAlreadyVoted, isParticipantNoLongerActive } from "@/lib/rpc-errors";
+import { logger } from "@/lib/logger";
 import { RatingSlider } from "@/components/rating-slider";
 import { Button } from "@/components/ui/button";
 import type { Rating } from "@/types/domain";
@@ -122,9 +123,19 @@ export function AudienceApp({ initialEvent, initialParticipant, initialTop3 }: A
         void loadEventState();
       })
       .subscribe((subStatus) => {
-        setRealtimeIssue(
-          subStatus === "CHANNEL_ERROR" || subStatus === "TIMED_OUT" || subStatus === "CLOSED",
-        );
+        const isIssue =
+          subStatus === "CHANNEL_ERROR" || subStatus === "TIMED_OUT" || subStatus === "CLOSED";
+        setRealtimeIssue(isIssue);
+        if (isIssue) {
+          logger.realtimeStatus({ app: "audience", status: subStatus });
+        }
+        // Realtime is a sync signal, not the source of truth: whatever
+        // changed while we were disconnected (or during the initial
+        // handshake) isn't replayed, so re-fetch on every (re)connect
+        // rather than trusting whatever's already in state.
+        if (subStatus === "SUBSCRIBED") {
+          void loadEventState();
+        }
       });
 
     return () => {
@@ -166,6 +177,7 @@ export function AudienceApp({ initialEvent, initialParticipant, initialTop3 }: A
 
       setSubmitState("error");
       setErrorMessage(friendlyVoteError(error.message));
+      logger.voteFailed({ participantId: participant.id, rating, code: error.message });
 
       if (isParticipantNoLongerActive(error.message)) {
         void loadEventState();

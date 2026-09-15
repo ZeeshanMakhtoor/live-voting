@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ParticipantRow, LeaderboardRow } from "./dashboard";
+import { validateParticipantInput } from "@/lib/participant-validation";
 
 interface ParticipantListProps {
   participants: ParticipantRow[];
@@ -204,6 +205,18 @@ function EditRow({
   const [name, setName] = useState(participant.name);
   const [batch, setBatch] = useState(participant.batch ?? "");
   const [year, setYear] = useState(participant.year ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSave() {
+    const values = { name: name.trim(), batch: batch.trim(), year: year.trim() };
+    const validationError = validateParticipantInput(values);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
+    void onSave(values);
+  }
 
   return (
     <tr className="border-b border-foreground/20 bg-muted">
@@ -214,6 +227,7 @@ function EditRow({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
+          maxLength={150}
           className="h-9 w-full border-2 border-foreground bg-background px-2 text-sm"
         />
       </td>
@@ -221,6 +235,7 @@ function EditRow({
         <input
           value={batch}
           onChange={(e) => setBatch(e.target.value)}
+          maxLength={100}
           className="h-9 w-full border-2 border-foreground bg-background px-2 text-sm"
         />
       </td>
@@ -228,16 +243,19 @@ function EditRow({
         <input
           value={year}
           onChange={(e) => setYear(e.target.value)}
+          maxLength={4}
+          inputMode="numeric"
           className="h-9 w-full border-2 border-foreground bg-background px-2 text-sm"
         />
       </td>
       <td colSpan={3} />
       <td className="px-3 py-2">
+        {error && <p className="mb-1 text-xs font-medium text-destructive">{error}</p>}
         <div className="flex gap-1.5">
           <button
             type="button"
             disabled={busy || !name.trim()}
-            onClick={() => onSave({ name: name.trim(), batch: batch.trim(), year: year.trim() })}
+            onClick={handleSave}
             className="border border-foreground bg-foreground px-2 py-1 text-xs font-bold uppercase text-background disabled:opacity-40"
           >
             Save
@@ -266,13 +284,21 @@ function AddParticipantForm({
   const [batch, setBatch] = useState("");
   const [year, setYear] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || submitting) return;
+    if (submitting) return;
+    const values = { name: name.trim(), batch: batch.trim(), year: year.trim() };
+    const validationError = validateParticipantInput(values);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
     setSubmitting(true);
     try {
-      await onAdd({ name: name.trim(), batch: batch.trim(), year: year.trim() });
+      await onAdd(values);
       setName("");
       setBatch("");
       setYear("");
@@ -295,6 +321,7 @@ function AddParticipantForm({
           onChange={(e) => setName(e.target.value)}
           placeholder="Aisha Khan"
           required
+          maxLength={150}
           className="h-10 w-48 border-2 border-foreground bg-background px-2 text-sm"
         />
       </label>
@@ -306,6 +333,7 @@ function AddParticipantForm({
           value={batch}
           onChange={(e) => setBatch(e.target.value)}
           placeholder="BTech CSE"
+          maxLength={100}
           className="h-10 w-40 border-2 border-foreground bg-background px-2 text-sm"
         />
       </label>
@@ -317,12 +345,19 @@ function AddParticipantForm({
           value={year}
           onChange={(e) => setYear(e.target.value)}
           placeholder="2028"
+          maxLength={4}
+          inputMode="numeric"
           className="h-10 w-24 border-2 border-foreground bg-background px-2 text-sm"
         />
       </label>
       <Button type="submit" disabled={busy || submitting || !name.trim()} className="uppercase">
         {submitting ? "Adding…" : "Add Participant"}
       </Button>
+      {error && (
+        <p role="alert" className="w-full text-xs font-medium text-destructive">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

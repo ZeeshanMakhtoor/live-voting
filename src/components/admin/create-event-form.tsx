@@ -38,6 +38,7 @@ export function CreateEventForm({ onCreate }: CreateEventFormProps) {
             onChange={(e) => setName(e.target.value)}
             placeholder="Literary Club — Live Voting"
             required
+            maxLength={200}
             className="h-11 border-2 border-foreground bg-background px-3 text-sm"
           />
         </label>

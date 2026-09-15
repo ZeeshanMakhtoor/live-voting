@@ -19,5 +19,14 @@ export default async function ProtectedAdminLayout({
     redirect(await adminPath("/login"));
   }
 
+  // A valid session is not the same as being an admin. Admin authority
+  // lives in an allowlist (see the admin_users migration), so a signed-in
+  // account that isn't on it gets turned away here rather than shown a
+  // dashboard that RLS would silently empty out.
+  const { data: isAdmin } = await supabase.rpc("is_admin");
+  if (!isAdmin) {
+    redirect(await adminPath("/login?denied=1"));
+  }
+
   return <>{children}</>;
 }

@@ -174,6 +174,10 @@ export interface Database {
         Args: { p_event_id: string };
         Returns: { rank: number; name: string }[];
       };
+      is_admin: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
       admin_start_participant: {
         Args: { p_event_id: string; p_participant_id: string };
         Returns: undefined;
