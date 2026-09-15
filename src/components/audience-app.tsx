@@ -246,7 +246,7 @@ function AudienceContent({
   if (event.status === "finished") {
     return (
       <div className="w-full max-w-sm text-center">
-        <p className="text-3xl font-black uppercase tracking-tight">The event has concluded.</p>
+        <p className="text-3xl font-black uppercase tracking-tight">Event Complete</p>
         <p className="mt-2 text-sm text-muted-foreground">Thank you for participating.</p>
 
         {top3 && top3.length > 0 && (
@@ -258,10 +258,12 @@ function AudienceContent({
               {top3.map((row) => (
                 <li
                   key={row.rank}
-                  className="flex items-center gap-4 border-b-2 border-foreground pb-2 text-left"
+                  className="flex items-center justify-center gap-3 border-b-2 border-foreground pb-2 text-left"
                 >
-                  <span className="text-3xl font-black tabular-nums">{row.rank}</span>
-                  <span className="text-lg font-bold uppercase">{row.name}</span>
+                  <span className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                    {row.rank === 1 ? "1st" : row.rank === 2 ? "2nd" : "3rd"}
+                  </span>
+                  <span className="text-lg font-bold uppercase">— {row.name}</span>
                 </li>
               ))}
             </ol>

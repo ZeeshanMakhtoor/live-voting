@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CreateEventForm } from "./create-event-form";
 import { ParticipantList } from "./participant-list";
+import { LiveLeaderboard } from "./live-leaderboard";
 import type { EventStatus, ParticipantStatus, VotingState } from "@/types/database";
 
 export interface EventRow {
@@ -29,8 +30,14 @@ export interface ParticipantRow {
   status: ParticipantStatus;
 }
 
-export interface ScoreRow {
+export interface LeaderboardRow {
+  rank: number;
   participant_id: string;
+  name: string;
+  batch: string | null;
+  year: string | null;
+  display_order: number;
+  status: ParticipantStatus;
   vote_count: number;
   total_rating_points: number;
   average_rating: number | null;
@@ -39,7 +46,7 @@ export interface ScoreRow {
 interface AdminDashboardProps {
   initialEvent: EventRow | null;
   initialParticipants: ParticipantRow[];
-  initialScores: ScoreRow[];
+  initialLeaderboard: LeaderboardRow[];
 }
 
 function currentAdminLoginPath(): string {
@@ -50,7 +57,7 @@ function currentAdminLoginPath(): string {
 export function AdminDashboard({
   initialEvent,
   initialParticipants,
-  initialScores,
+  initialLeaderboard,
 }: AdminDashboardProps) {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
@@ -58,7 +65,7 @@ export function AdminDashboard({
 
   const [event, setEvent] = useState(initialEvent);
   const [participants, setParticipants] = useState(initialParticipants);
-  const [scores, setScores] = useState(initialScores);
+  const [leaderboard, setLeaderboard] = useState(initialLeaderboard);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -94,22 +101,22 @@ export function AdminDashboard({
     setEvent(nextEvent);
 
     if (nextEvent) {
-      const [{ data: participantRows }, { data: scoreRows }] = await Promise.all([
+      const [{ data: participantRows }, { data: leaderboardRows }] = await Promise.all([
         supabase
           .from("participants")
           .select("id, event_id, name, batch, year, display_order, status")
           .eq("event_id", nextEvent.id)
           .order("display_order", { ascending: true }),
-        supabase
-          .from("participant_scores")
-          .select("participant_id, vote_count, total_rating_points, average_rating")
-          .eq("event_id", nextEvent.id),
+        // Ranking is computed server-side (average -> votes -> points ->
+        // display_order tie-break) — never pull raw votes into the
+        // browser to rank them here.
+        supabase.rpc("get_leaderboard", { p_event_id: nextEvent.id }),
       ]);
       setParticipants(participantRows ?? []);
-      setScores(scoreRows ?? []);
+      setLeaderboard(leaderboardRows ?? []);
     } else {
       setParticipants([]);
-      setScores([]);
+      setLeaderboard([]);
     }
   }, [supabase]);
 
@@ -247,8 +254,9 @@ export function AdminDashboard({
   }
 
   const activeParticipant = participants.find((p) => p.id === event.active_participant_id) ?? null;
-  const activeScore = scores.find((s) => s.participant_id === event.active_participant_id) ?? null;
-  const totalRatings = scores.reduce((sum, s) => sum + s.vote_count, 0);
+  const activeScore =
+    leaderboard.find((s) => s.participant_id === event.active_participant_id) ?? null;
+  const totalRatings = leaderboard.reduce((sum, s) => sum + s.vote_count, 0);
   const counts = {
     total: participants.filter((p) => p.status !== "removed").length,
     completed: participants.filter((p) => p.status === "completed").length,
@@ -318,7 +326,12 @@ export function AdminDashboard({
           void callRpc("closeVoting", "admin_close_voting", { p_event_id: event.id })
         }
         onFinishEvent={() => {
-          if (!window.confirm("Finish the event? This closes voting for good.")) return;
+          if (
+            !window.confirm(
+              "Are you sure you want to finish this event? Voting will no longer be available.",
+            )
+          )
+            return;
           void callRpc("finishEvent", "admin_finish_event", { p_event_id: event.id });
         }}
       />
@@ -337,9 +350,13 @@ export function AdminDashboard({
       </div>
 
       <div className="mt-6">
+        <LiveLeaderboard leaderboard={leaderboard} eventName={event.name} finished={event.status === "finished"} />
+      </div>
+
+      <div className="mt-6">
         <ParticipantList
           participants={participants}
-          scores={scores}
+          scores={leaderboard}
           activeParticipantId={event.active_participant_id}
           busy={busy}
           onAdd={handleAddParticipant}

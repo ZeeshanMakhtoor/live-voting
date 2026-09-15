@@ -1,12 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
-import { AdminDashboard, type EventRow, type ParticipantRow, type ScoreRow } from "@/components/admin/dashboard";
+import {
+  AdminDashboard,
+  type EventRow,
+  type ParticipantRow,
+  type LeaderboardRow,
+} from "@/components/admin/dashboard";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
   // "One active event" per the product brief: the live one if there is
-  // one, else the most recently touched non-finished (draft) event, so
-  // the admin always lands on the event they're actually running.
+  // one, else the most recently created draft, else the most recently
+  // finished one — so a fresh page load after finishing still lands on
+  // that event's final results instead of the empty "no event" state.
   const { data: liveEvent } = await supabase
     .from("events")
     .select("id, name, status, active_participant_id, voting_state")
@@ -26,8 +32,19 @@ export default async function DashboardPage() {
     event = draftEvent ?? null;
   }
 
+  if (!event) {
+    const { data: finishedEvent } = await supabase
+      .from("events")
+      .select("id, name, status, active_participant_id, voting_state")
+      .eq("status", "finished")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    event = finishedEvent ?? null;
+  }
+
   let participants: ParticipantRow[] = [];
-  let scores: ScoreRow[] = [];
+  let leaderboard: LeaderboardRow[] = [];
 
   if (event) {
     const { data: participantRows } = await supabase
@@ -37,12 +54,20 @@ export default async function DashboardPage() {
       .order("display_order", { ascending: true });
     participants = participantRows ?? [];
 
-    const { data: scoreRows } = await supabase
-      .from("participant_scores")
-      .select("participant_id, vote_count, total_rating_points, average_rating")
-      .eq("event_id", event.id);
-    scores = scoreRows ?? [];
+    // Ranking is computed server-side (average -> votes -> points ->
+    // display_order tie-break) — never pull raw votes into the browser
+    // to rank them here.
+    const { data: leaderboardRows } = await supabase.rpc("get_leaderboard", {
+      p_event_id: event.id,
+    });
+    leaderboard = leaderboardRows ?? [];
   }
 
-  return <AdminDashboard initialEvent={event} initialParticipants={participants} initialScores={scores} />;
+  return (
+    <AdminDashboard
+      initialEvent={event}
+      initialParticipants={participants}
+      initialLeaderboard={leaderboard}
+    />
+  );
 }

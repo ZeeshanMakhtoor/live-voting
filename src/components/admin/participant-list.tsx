@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ParticipantRow, ScoreRow } from "./dashboard";
+import type { ParticipantRow, LeaderboardRow } from "./dashboard";
 
 interface ParticipantListProps {
   participants: ParticipantRow[];
-  scores: ScoreRow[];
+  scores: LeaderboardRow[];
   activeParticipantId: string | null;
   busy: boolean;
   onAdd: (values: { name: string; batch: string; year: string }) => Promise<void>;
