@@ -29,6 +29,9 @@ export type RpcErrorCode =
   | "ALREADY_VOTED";
 
 export interface Database {
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5";
+  };
   public: {
     Tables: {
       events: {
@@ -51,6 +54,7 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
+        Relationships: [];
       };
       participants: {
         Row: {
@@ -76,6 +80,14 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["participants"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "participants_event_id_fkey";
+            columns: ["event_id"];
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       votes: {
         Row: {
@@ -98,6 +110,20 @@ export interface Database {
         // purpose. The database enforces this too — see 0001's RLS
         // policies (no UPDATE/DELETE policy on votes for any role).
         Update: never;
+        Relationships: [
+          {
+            foreignKeyName: "votes_event_id_fkey";
+            columns: ["event_id"];
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "votes_participant_id_fkey";
+            columns: ["participant_id"];
+            referencedRelation: "participants";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: {
@@ -114,6 +140,7 @@ export interface Database {
           total_rating_points: number;
           average_rating: number | null;
         };
+        Relationships: [];
       };
     };
     Functions: {
@@ -139,6 +166,10 @@ export interface Database {
           total_rating_points: number;
           average_rating: number | null;
         }[];
+      };
+      get_public_top3: {
+        Args: { p_event_id: string };
+        Returns: { rank: number; name: string }[];
       };
       admin_start_participant: {
         Args: { p_event_id: string; p_participant_id: string };

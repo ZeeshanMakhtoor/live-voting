@@ -4,16 +4,21 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
-    --primary: 222 47% 11%;
-    --primary-foreground: 0 0% 100%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 91%;
-    --radius: 0.5rem;
+    /* Editorial "paper" theme: warm off-white ground, near-black ink,
+       one restrained accent (used only for the selected rating + submit
+       button). No gradients, no shadows — flat fields and thick rules. */
+    --background: 42 24% 95%;
+    --foreground: 20 12% 10%;
+    --primary: 20 12% 10%;
+    --primary-foreground: 42 24% 96%;
+    --muted: 40 16% 88%;
+    --muted-foreground: 20 8% 38%;
+    --destructive: 355 65% 40%;
+    --destructive-foreground: 42 24% 96%;
+    --accent: 355 65% 38%;
+    --accent-foreground: 42 24% 96%;
+    --border: 20 12% 10%;
+    --radius: 0px;
   }
 
   * {
@@ -23,5 +28,52 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  /* Native range input, styled as a thick editorial slider. Kept native
+     (not a hand-rolled div) so drag, click-to-jump, keyboard arrows and
+     screen-reader value announcement all work for free. */
+  .lcv-range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    background: linear-gradient(
+      to right,
+      hsl(var(--foreground)) var(--fill),
+      hsl(var(--muted)) var(--fill)
+    );
+    border: 2px solid hsl(var(--foreground));
+    cursor: pointer;
+  }
+
+  .lcv-range:focus-visible {
+    outline: 3px solid hsl(var(--accent));
+    outline-offset: 2px;
+  }
+
+  .lcv-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 0;
+    background: hsl(var(--accent));
+    border: 3px solid hsl(var(--foreground));
+    cursor: pointer;
+  }
+
+  .lcv-range::-moz-range-thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 0;
+    background: hsl(var(--accent));
+    border: 3px solid hsl(var(--foreground));
+    cursor: pointer;
+  }
+
+  .lcv-range::-moz-range-track {
+    background: transparent;
   }
 }
