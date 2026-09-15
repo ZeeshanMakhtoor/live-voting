@@ -10,8 +10,8 @@ export function LoginForm() {
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="email" className="text-sm font-medium">
-          Email
+        <label htmlFor="email" className="text-xs font-bold uppercase tracking-wide">
+          Email / Username
         </label>
         <input
           id="email"
@@ -19,11 +19,11 @@ export function LoginForm() {
           type="email"
           required
           autoComplete="username"
-          className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          className="h-11 border-2 border-foreground bg-background px-3 text-sm"
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="password" className="text-sm font-medium">
+        <label htmlFor="password" className="text-xs font-bold uppercase tracking-wide">
           Password
         </label>
         <input
@@ -32,11 +32,17 @@ export function LoginForm() {
           type="password"
           required
           autoComplete="current-password"
-          className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          className="h-11 border-2 border-foreground bg-background px-3 text-sm"
         />
       </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit">Sign in</Button>
+      {error ? (
+        <p role="alert" className="text-sm font-medium text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <Button type="submit" size="lg" className="mt-1 uppercase tracking-wide">
+        Login
+      </Button>
     </form>
   );
 }

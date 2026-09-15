@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { adminPath } from "@/lib/admin-path";
 
 // Never statically prerender anything under this group. A prerendered page
 // can be served straight from Vercel's edge cache, bypassing middleware
@@ -15,7 +16,7 @@ export default async function ProtectedAdminLayout({
   const { data } = await supabase.auth.getUser();
 
   if (!data.user) {
-    redirect("/admin/login");
+    redirect(await adminPath("/login"));
   }
 
   return <>{children}</>;

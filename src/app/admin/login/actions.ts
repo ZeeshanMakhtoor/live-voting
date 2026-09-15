@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { adminPath } from "@/lib/admin-path";
 
 export async function signIn(_prevState: string | null, formData: FormData): Promise<string> {
   const email = String(formData.get("email") ?? "");
@@ -18,5 +19,5 @@ export async function signIn(_prevState: string | null, formData: FormData): Pro
     return "Invalid email or password.";
   }
 
-  redirect("/admin");
+  redirect(await adminPath("/dashboard"));
 }

@@ -26,6 +26,9 @@ export type RpcErrorCode =
   | "VOTING_NOT_PAUSED"
   | "NO_ACTIVE_PARTICIPANT"
   | "NO_MORE_PARTICIPANTS"
+  | "NO_PREVIOUS_PARTICIPANT"
+  | "PARTICIPANT_HAS_VOTES"
+  | "VOTING_ALREADY_CLOSED"
   | "ALREADY_VOTED";
 
 export interface Database {
@@ -197,6 +200,18 @@ export interface Database {
       };
       admin_finish_event: {
         Args: { p_event_id: string };
+        Returns: undefined;
+      };
+      admin_previous_participant: {
+        Args: { p_event_id: string };
+        Returns: string;
+      };
+      admin_remove_participant: {
+        Args: { p_event_id: string; p_participant_id: string };
+        Returns: undefined;
+      };
+      admin_swap_participant_order: {
+        Args: { p_event_id: string; p_participant_id_a: string; p_participant_id_b: string };
         Returns: undefined;
       };
     };
