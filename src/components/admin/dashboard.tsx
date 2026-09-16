@@ -44,6 +44,9 @@ export interface LeaderboardRow {
   average_rating: number | null;
 }
 
+/** How long votes are allowed to pile up before one refresh covers them all. */
+const VOTE_REFRESH_WINDOW_MS = 700;
+
 interface AdminDashboardProps {
   initialEvent: EventRow | null;
   initialParticipants: ParticipantRow[];
@@ -122,10 +125,32 @@ export function AdminDashboard({
     }
   }, [supabase]);
 
+  // Votes arrive in bursts — 100 people rating the same performer within
+  // a couple of seconds is the normal case, and refreshing per payload
+  // would mean 100 full re-derives (three queries each) back to back.
+  // Coalesce them: the first vote schedules one refresh and every vote
+  // landing inside that window rides along with it.
+  const voteRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleVoteRefresh = useCallback(() => {
+    if (voteRefreshTimer.current) return;
+    voteRefreshTimer.current = setTimeout(() => {
+      voteRefreshTimer.current = null;
+      void refresh();
+    }, VOTE_REFRESH_WINDOW_MS);
+  }, [refresh]);
+
+  useEffect(
+    () => () => {
+      if (voteRefreshTimer.current) clearTimeout(voteRefreshTimer.current);
+    },
+    [],
+  );
+
   // One subscription per relevant table; every payload just triggers a
   // full re-derive rather than patching state from the payload — simpler
   // and correct whether the change came from this admin's own action or
-  // an audience member's vote landing.
+  // an audience member's vote landing. Event and participant changes are
+  // rare and need to show immediately; votes are debounced above.
   useEffect(() => {
     const channel = supabase
       .channel("admin-dashboard-watch")
@@ -136,7 +161,7 @@ export function AdminDashboard({
         void refresh();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "votes" }, () => {
-        void refresh();
+        scheduleVoteRefresh();
       })
       .subscribe((subStatus) => {
         const isIssue =
@@ -156,7 +181,7 @@ export function AdminDashboard({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, refresh]);
+  }, [supabase, refresh, scheduleVoteRefresh]);
 
   async function callRpc(
     action: AdminAction,
@@ -265,9 +290,11 @@ export function AdminDashboard({
 
   if (!event) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-10">
+      <div className="min-h-[100dvh]">
         <DashboardHeader onLogout={handleLogout} realtimeIssue={realtimeIssue} />
-        <CreateEventForm onCreate={handleCreateEvent} />
+        <div className="mx-auto max-w-2xl px-4 py-10">
+          <CreateEventForm onCreate={handleCreateEvent} />
+        </div>
       </div>
     );
   }
@@ -276,134 +303,148 @@ export function AdminDashboard({
   const activeScore =
     leaderboard.find((s) => s.participant_id === event.active_participant_id) ?? null;
   const totalRatings = leaderboard.reduce((sum, s) => sum + s.vote_count, 0);
+  const remaining = participants.filter((p) => p.status === "upcoming").length;
   const counts = {
     total: participants.filter((p) => p.status !== "removed").length,
     completed: participants.filter((p) => p.status === "completed").length,
-    upcoming: participants.filter((p) => p.status === "upcoming").length,
     skipped: participants.filter((p) => p.status === "skipped").length,
   };
+  const isFinished = event.status === "finished";
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="min-h-[100dvh]">
       <DashboardHeader onLogout={handleLogout} realtimeIssue={realtimeIssue} />
 
-      {errorMessage && (
-        <p
-          role="alert"
-          className="mt-4 border-2 border-destructive bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
-        >
-          {errorMessage}
-        </p>
-      )}
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="border-4 border-foreground p-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            Event status
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        {errorMessage && (
+          <p
+            role="alert"
+            className="mb-6 border-2 border-destructive bg-destructive px-4 py-3 text-sm font-bold text-destructive-foreground"
+          >
+            {errorMessage}
           </p>
-          <p className="mt-1 text-3xl font-black uppercase">{event.status}</p>
-          <p className="mt-3 truncate text-sm text-muted-foreground">{event.name}</p>
-        </div>
+        )}
 
-        <div className="border-4 border-foreground p-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            Current participant
-          </p>
-          <p className="mt-1 text-2xl font-black uppercase">
-            {activeParticipant ? activeParticipant.name : "—"}
-          </p>
-          <p className="mt-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Voting: <span className="text-foreground">{event.voting_state.replace("_", " ")}</span>
-          </p>
-        </div>
-      </div>
-
-      <LiveControls
-        event={event}
-        activeParticipant={activeParticipant}
-        busy={busy}
-        onNext={() => void callRpc("nextParticipant", "admin_next_participant", { p_event_id: event.id })}
-        onPrevious={() =>
-          void callRpc("previousParticipant", "admin_previous_participant", { p_event_id: event.id })
-        }
-        onSkipCurrent={() => {
-          if (!activeParticipant) return;
-          if (!window.confirm(`Skip ${activeParticipant.name}?`)) return;
-          void callRpc("skipParticipant", "admin_skip_participant", {
-            p_event_id: event.id,
-            p_participant_id: activeParticipant.id,
-          });
-        }}
-        onOpenVoting={() => {
-          const action: AdminAction = event.voting_state === "paused" ? "resumeVoting" : "openVoting";
-          void callRpc(action, "admin_open_voting", { p_event_id: event.id });
-        }}
-        onPauseVoting={() =>
-          void callRpc("pauseVoting", "admin_pause_voting", { p_event_id: event.id })
-        }
-        onCloseVoting={() =>
-          void callRpc("closeVoting", "admin_close_voting", { p_event_id: event.id })
-        }
-        onFinishEvent={() => {
-          if (
-            !window.confirm(
-              "Are you sure you want to finish this event? Voting will no longer be available.",
-            )
-          )
-            return;
-          void callRpc("finishEvent", "admin_finish_event", { p_event_id: event.id });
-        }}
-      />
-
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        <StatTile label="Participants" value={counts.total} />
-        <StatTile label="Completed" value={counts.completed} />
-        <StatTile label="Upcoming" value={counts.upcoming} />
-        <StatTile label="Skipped" value={counts.skipped} />
-        <StatTile label="Total ratings" value={totalRatings} />
-        <StatTile label="Current votes" value={activeScore?.vote_count ?? 0} />
-        <StatTile
-          label="Current avg"
-          value={activeScore?.average_rating != null ? Number(activeScore.average_rating).toFixed(2) : "—"}
-        />
-      </div>
-
-      <div className="mt-6">
-        <LiveLeaderboard leaderboard={leaderboard} eventName={event.name} finished={event.status === "finished"} />
-      </div>
-
-      <div className="mt-6">
-        <ParticipantList
-          participants={participants}
-          scores={leaderboard}
-          activeParticipantId={event.active_participant_id}
+        <StagePanel
+          event={event}
+          activeParticipant={activeParticipant}
+          activeScore={activeScore}
           busy={busy}
-          onAdd={handleAddParticipant}
-          onEdit={handleEditParticipant}
-          onStart={(id) =>
-            void callRpc("startParticipant", "admin_start_participant", {
+          onNext={() =>
+            void callRpc("nextParticipant", "admin_next_participant", { p_event_id: event.id })
+          }
+          onPrevious={() =>
+            void callRpc("previousParticipant", "admin_previous_participant", {
               p_event_id: event.id,
-              p_participant_id: id,
             })
           }
-          onSkip={(id) => {
-            const p = participants.find((x) => x.id === id);
-            if (p && !window.confirm(`Skip ${p.name}?`)) return;
+          onSkipCurrent={() => {
+            if (!activeParticipant) return;
+            if (!window.confirm(`Skip ${activeParticipant.name}?`)) return;
             void callRpc("skipParticipant", "admin_skip_participant", {
               p_event_id: event.id,
-              p_participant_id: id,
+              p_participant_id: activeParticipant.id,
             });
           }}
-          onRemove={(id) => {
-            const p = participants.find((x) => x.id === id);
-            if (p && !window.confirm(`Remove ${p.name}? This cannot be undone.`)) return;
-            void callRpc("removeParticipant", "admin_remove_participant", {
-              p_event_id: event.id,
-              p_participant_id: id,
-            });
+          onOpenVoting={() => {
+            const action: AdminAction =
+              event.voting_state === "paused" ? "resumeVoting" : "openVoting";
+            void callRpc(action, "admin_open_voting", { p_event_id: event.id });
           }}
-          onMove={handleMove}
+          onPauseVoting={() =>
+            void callRpc("pauseVoting", "admin_pause_voting", { p_event_id: event.id })
+          }
+          onCloseVoting={() =>
+            void callRpc("closeVoting", "admin_close_voting", { p_event_id: event.id })
+          }
         />
+
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <StatTile label="Ratings this performer" value={activeScore?.vote_count ?? 0} accent />
+          <StatTile
+            label="Average now"
+            value={
+              activeScore?.average_rating != null
+                ? Number(activeScore.average_rating).toFixed(2)
+                : "—"
+            }
+          />
+          <StatTile label="Remaining" value={remaining} />
+          <StatTile label="Completed" value={counts.completed} />
+          <StatTile label="Total ratings" value={totalRatings} />
+        </div>
+
+        <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
+          <LiveLeaderboard
+            leaderboard={leaderboard}
+            eventName={event.name}
+            finished={isFinished}
+          />
+          <ParticipantList
+            participants={participants}
+            scores={leaderboard}
+            activeParticipantId={event.active_participant_id}
+            busy={busy}
+            onAdd={handleAddParticipant}
+            onEdit={handleEditParticipant}
+            onStart={(id) =>
+              void callRpc("startParticipant", "admin_start_participant", {
+                p_event_id: event.id,
+                p_participant_id: id,
+              })
+            }
+            onSkip={(id) => {
+              const p = participants.find((x) => x.id === id);
+              if (p && !window.confirm(`Skip ${p.name}?`)) return;
+              void callRpc("skipParticipant", "admin_skip_participant", {
+                p_event_id: event.id,
+                p_participant_id: id,
+              });
+            }}
+            onRemove={(id) => {
+              const p = participants.find((x) => x.id === id);
+              if (p && !window.confirm(`Remove ${p.name}? This cannot be undone.`)) return;
+              void callRpc("removeParticipant", "admin_remove_participant", {
+                p_event_id: event.id,
+                p_participant_id: id,
+              });
+            }}
+            onMove={handleMove}
+          />
+        </div>
+
+        {/* Finishing is irreversible and ends voting for everyone, so it
+            lives apart from the controls used every two minutes rather
+            than one mis-tap away from "Next Participant". */}
+        <section className="mt-8 border-2 border-destructive p-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-destructive">
+                End of event
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {isFinished
+                  ? "This event is finished. Results below are final."
+                  : "Closes voting permanently and reveals the top 3 to the audience."}
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              disabled={busy || isFinished}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    "Are you sure you want to finish this event? Voting will no longer be available.",
+                  )
+                )
+                  return;
+                void callRpc("finishEvent", "admin_finish_event", { p_event_id: event.id });
+              }}
+            >
+              {isFinished ? "Event finished" : "Finish event"}
+            </Button>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -417,52 +458,48 @@ function DashboardHeader({
   realtimeIssue: boolean;
 }) {
   return (
-    <header className="flex items-center justify-between border-b-4 border-foreground pb-4">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-[0.3em]">Literary Club</p>
-        <h1 className="text-lg font-black uppercase tracking-tight">Live Voting — Admin</h1>
-        {realtimeIssue && (
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Reconnecting…
+    <header className="rule-thick">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+        <div className="flex items-baseline gap-3">
+          <p className="text-[0.7rem] font-bold uppercase tracking-[0.3em]">Literary Club</p>
+          <span aria-hidden className="text-muted-foreground">
+            /
+          </span>
+          <p className="font-display text-lg font-black uppercase tracking-tight">Admin</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <p
+            className={cn(
+              "text-[0.65rem] font-bold uppercase tracking-[0.15em]",
+              realtimeIssue ? "text-accent" : "text-muted-foreground",
+            )}
+          >
+            {realtimeIssue ? "Reconnecting" : "Live"}
           </p>
-        )}
+          <Button variant="outline" size="sm" onClick={onLogout}>
+            Log out
+          </Button>
+        </div>
       </div>
-      <button
-        type="button"
-        onClick={onLogout}
-        className="border-2 border-foreground px-3 py-1.5 text-xs font-bold uppercase tracking-wide"
-      >
-        Log out
-      </button>
     </header>
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="border-2 border-foreground p-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-black tabular-nums">{value}</p>
-    </div>
-  );
-}
+const VOTING_LABEL: Record<VotingState, string> = {
+  not_started: "Not started",
+  open: "Open",
+  paused: "Paused",
+  closed: "Closed",
+};
 
-interface LiveControlsProps {
-  event: EventRow;
-  activeParticipant: ParticipantRow | null;
-  busy: boolean;
-  onNext: () => void;
-  onPrevious: () => void;
-  onSkipCurrent: () => void;
-  onOpenVoting: () => void;
-  onPauseVoting: () => void;
-  onCloseVoting: () => void;
-  onFinishEvent: () => void;
-}
-
-function LiveControls({
+/**
+ * The one panel the admin looks at all night: who is on stage, whether
+ * voting is open, and the single next thing to press.
+ */
+function StagePanel({
   event,
   activeParticipant,
+  activeScore,
   busy,
   onNext,
   onPrevious,
@@ -470,93 +507,135 @@ function LiveControls({
   onOpenVoting,
   onPauseVoting,
   onCloseVoting,
-  onFinishEvent,
-}: LiveControlsProps) {
+}: {
+  event: EventRow;
+  activeParticipant: ParticipantRow | null;
+  activeScore: LeaderboardRow | null;
+  busy: boolean;
+  onNext: () => void;
+  onPrevious: () => void;
+  onSkipCurrent: () => void;
+  onOpenVoting: () => void;
+  onPauseVoting: () => void;
+  onCloseVoting: () => void;
+}) {
   const isFinished = event.status === "finished";
-  const votingButton =
-    event.voting_state === "open" ? (
-      <>
-        <ControlButton disabled={busy} onClick={onPauseVoting}>
-          Pause Voting
-        </ControlButton>
-        <ControlButton disabled={busy} onClick={onCloseVoting}>
-          Close Voting
-        </ControlButton>
-      </>
-    ) : event.voting_state === "paused" ? (
-      <>
-        <ControlButton disabled={busy} onClick={onOpenVoting}>
-          Resume Voting
-        </ControlButton>
-        <ControlButton disabled={busy} onClick={onCloseVoting}>
-          Close Voting
-        </ControlButton>
-      </>
-    ) : event.voting_state === "closed" ? (
-      <ControlButton disabled className="opacity-50">
-        Voting Closed
-      </ControlButton>
-    ) : (
-      <ControlButton disabled={busy || !activeParticipant} onClick={onOpenVoting} primary>
-        Start Voting
-      </ControlButton>
-    );
+  const votingOpen = event.voting_state === "open";
+
+  // Exactly one recommended next step, derived from current state, so the
+  // admin never has to work out which of six buttons applies right now.
+  const primary = isFinished
+    ? null
+    : !activeParticipant
+      ? { label: "Start next performer", onClick: onNext }
+      : event.voting_state === "not_started"
+        ? { label: "Open voting", onClick: onOpenVoting }
+        : event.voting_state === "open"
+          ? { label: "Close voting", onClick: onCloseVoting }
+          : event.voting_state === "paused"
+            ? { label: "Resume voting", onClick: onOpenVoting }
+            : { label: "Next performer", onClick: onNext };
 
   return (
-    <div className="mt-6 border-4 border-foreground p-4">
-      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-        Live controls
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <ControlButton disabled={busy || isFinished} onClick={onPrevious}>
-          ← Previous
-        </ControlButton>
-        <ControlButton disabled={busy || isFinished} onClick={onNext} primary={!activeParticipant}>
-          {activeParticipant ? "Next Participant →" : "Start Event →"}
-        </ControlButton>
-        <ControlButton disabled={busy || isFinished || !activeParticipant} onClick={onSkipCurrent}>
-          Skip Current
-        </ControlButton>
-        {!isFinished && votingButton}
-        <ControlButton disabled={busy || isFinished} onClick={onFinishEvent} destructive>
-          Finish Event
-        </ControlButton>
+    <section className="border-[3px] border-foreground">
+      <div className="grid gap-0 md:grid-cols-[1fr_auto]">
+        <div className="border-b-[3px] border-foreground p-5 md:border-b-0 md:border-r-[3px]">
+          <p className="eyebrow">On stage now</p>
+          <p className="font-display mt-2 text-4xl font-black leading-[0.95] tracking-tight sm:text-5xl">
+            {activeParticipant ? activeParticipant.name : isFinished ? "Event finished" : "Nobody yet"}
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {activeParticipant
+              ? [activeParticipant.batch, activeParticipant.year].filter(Boolean).join(" · ") ||
+                event.name
+              : event.name}
+          </p>
+        </div>
+
+        <div className="flex min-w-[13rem] flex-col justify-center p-5">
+          <p className="eyebrow">Voting</p>
+          <p
+            className={cn(
+              "font-display mt-1 text-3xl font-black uppercase leading-none",
+              votingOpen ? "text-accent" : "text-foreground",
+            )}
+          >
+            {VOTING_LABEL[event.voting_state]}
+          </p>
+          {activeParticipant && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              <span className="numeral text-xl text-foreground">
+                {activeScore?.vote_count ?? 0}
+              </span>{" "}
+              ratings in
+            </p>
+          )}
+        </div>
       </div>
-    </div>
+
+      {!isFinished && (
+        <div className="border-t-[3px] border-foreground p-4">
+          {primary && (
+            <Button
+              variant="accent"
+              size="lg"
+              className="w-full text-lg"
+              disabled={busy}
+              onClick={primary.onClick}
+            >
+              {busy ? "Working…" : primary.label}
+            </Button>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" disabled={busy} onClick={onPrevious}>
+              ← Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy || !activeParticipant}
+              onClick={onSkipCurrent}
+            >
+              Skip current
+            </Button>
+            {votingOpen && (
+              <Button variant="outline" size="sm" disabled={busy} onClick={onPauseVoting}>
+                Pause voting
+              </Button>
+            )}
+            {event.voting_state === "paused" && (
+              <Button variant="outline" size="sm" disabled={busy} onClick={onCloseVoting}>
+                Close voting
+              </Button>
+            )}
+            {activeParticipant && event.voting_state === "closed" && (
+              <Button variant="outline" size="sm" disabled={busy} onClick={onNext}>
+                Next performer
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
-function ControlButton({
-  children,
-  onClick,
-  disabled,
-  primary,
-  destructive,
-  className,
+function StatTile({
+  label,
+  value,
+  accent,
 }: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-  destructive?: boolean;
-  className?: string;
+  label: string;
+  value: string | number;
+  accent?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "border-2 px-3 py-2 text-xs font-bold uppercase tracking-wide disabled:opacity-40",
-        primary
-          ? "border-accent bg-accent text-accent-foreground"
-          : destructive
-            ? "border-destructive text-destructive"
-            : "border-foreground",
-        className,
-      )}
-    >
-      {children}
-    </button>
+    <div className={cn("border-2 p-3", accent ? "border-accent" : "border-foreground")}>
+      <p className="text-[0.65rem] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+        {label}
+      </p>
+      <p className={cn("numeral mt-1 text-3xl", accent && "text-accent")}>{value}</p>
+    </div>
   );
 }

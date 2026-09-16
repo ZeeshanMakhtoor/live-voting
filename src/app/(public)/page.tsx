@@ -32,7 +32,7 @@ export default async function AudienceHomePage() {
   if (event?.status === "live" && event.active_participant_id) {
     const { data: p } = await supabase
       .from("participants")
-      .select("id, name")
+      .select("id, name, batch, year")
       .eq("id", event.active_participant_id)
       .maybeSingle();
     participant = p ?? null;

@@ -1,157 +1,253 @@
 # Literary Club — Live Voting
 
-Audience rates one performer at a time from their phone; an admin drives the
-event from a separate subdomain and sees live rankings.
+Audience rates one performer at a time from their phone. An admin drives the event
+from a separate subdomain and watches rankings build live.
 
-- `yourdomain.com` — public audience app, no login
-- `admin.yourdomain.com` — admin app, email/password login
+---
 
-Next.js 14 (App Router) + Supabase (Postgres, Auth, Realtime), deployed on Vercel.
+## 1. What the application does
 
-## How it holds together
+A club event has a running order of 40–50 performers. Each performs in turn; while
+they're on stage the admin opens voting, and everyone in the room rates them 1–5 on
+their own phone. No login, no app install, no account.
 
-The database is the authority. Every rule that matters — one vote per voter per
-participant, votes only for the currently active participant, votes only while
-voting is open — is enforced inside Postgres, not in the browser or in a server
-action. The audience client talks to Supabase directly, so anything enforced only
-in JavaScript would be enforceable by nobody.
+- **`yourdomain.com`** — the audience app. Shows whoever is performing right now and
+  a 1–5 scale. One rating per person, per performer.
+- **`admin.yourdomain.com`** — the admin app, behind an email/password login. Build
+  the running order, advance performers, open and close voting, watch live stats,
+  finish the event and export results.
 
-- **Voting** goes through one function, `cast_vote`, which re-reads event and
-  participant state under a row lock before inserting. A stale client that
-  submits for a participant the admin has already moved past is rejected by the
-  database, not trusted.
-- **Duplicate votes** are backstopped by a unique index on
-  `(event_id, participant_id, voter_id)`. Concurrency cannot get around it: 40
-  simultaneous submissions from one voter produce exactly one row.
-- **Realtime is a sync signal, not a source of truth.** Both apps re-fetch state
-  on every (re)connect, because nothing that changed while disconnected is
-  replayed. A dropped connection shows a "Reconnecting…" indicator and recovers.
-- **Rankings are computed in SQL** (`get_leaderboard`). Raw votes are never sent
-  to a browser — the audience client cannot read the `votes` table at all.
-- **Admin authority is an allowlist** (`admin_users`), not "any signed-in user".
+When the admin finishes the event, the audience sees the top 3 and the admin sees
+full final results with a CSV export.
 
-## Local development
+## 2. Architecture
+
+Next.js 14 (App Router) on Vercel + Supabase (Postgres, Auth, Realtime). One
+deployment serves both apps; middleware routes by `Host` header.
+
+**The database is the authority.** Every rule that matters is enforced in Postgres,
+not in the browser and not in a server action. The audience client talks to Supabase
+directly, so anything enforced only in JavaScript would be enforced by nobody.
+
+| Concern | Where it lives |
+| --- | --- |
+| Casting a vote | `cast_vote()` — re-reads event and participant state under a row lock, then inserts |
+| One vote per person per performer | Unique index on `(event_id, participant_id, voter_id)` |
+| Event control | `admin_*()` functions, callable only by an allowlisted admin |
+| Ranking | `get_leaderboard()` — computed in SQL; raw votes never reach a browser |
+| Who may see what | Row Level Security on every table |
+
+Realtime is a **synchronisation signal, not a source of truth**. Nothing that changed
+while a client was disconnected is replayed, so both apps re-fetch state on every
+(re)connect and show a "Reconnecting" indicator while they're out of touch.
+
+```
+Audience phone ─┐
+                ├─→ Vercel (SSR, dynamic) ─→ Supabase Postgres ← RLS + RPCs
+Admin laptop  ──┘         ↑                        │
+                          └──── Realtime ──────────┘  (refetch trigger only)
+```
+
+Anonymous voters are identified by a random ID in `localStorage`. It is a convenience,
+never a trust boundary — the unique index is what actually stops double voting.
+
+## 3. Local setup
+
+Requires Node 20+.
 
 ```bash
-cp .env.example .env.local     # fill in the two NEXT_PUBLIC_ values
+git clone <your-repo-url>
+cd live-voting
 npm install
-npm run dev
+cp .env.example .env.local     # fill in the two NEXT_PUBLIC_ values
 ```
 
-Audience app at `http://localhost:3000`, admin app at `http://localhost:3000/admin`.
-To exercise the real subdomain split locally, add `admin.localhost` to your hosts
-file and set `NEXT_PUBLIC_ADMIN_HOST=admin.localhost:3000`.
+## 4. Supabase setup
 
-## Tests
+1. Create a project at [supabase.com](https://supabase.com). Pick the region closest
+   to your venue.
+2. **Settings → API** gives you the Project URL and the `anon` public key. Those are
+   the two values `.env.local` needs.
+3. Apply the migrations (section 6).
+4. Create the admin account (section 7).
+5. **Authentication → Providers → Email**: turn **off** "Enable sign ups". Admin access
+   is an explicit allowlist, so a stray signup gets no privileges — but there's no
+   reason to let strangers create accounts.
+6. **Authentication → Policies**: turn on leaked-password protection.
+7. **Realtime**: the migrations already add `events`, `participants` and `votes` to the
+   `supabase_realtime` publication. Confirm under **Database → Replication**.
+8. **RLS**: enabled on every table by the migrations. Nothing to do by hand. The
+   resulting policy set is:
+   - `events` — anon may read only `live` and `finished` events; admins may do anything.
+   - `participants` — anon may read participants of a `live` event; admins may do anything.
+   - `votes` — **no anon policy at all**, and admins get `SELECT` only. Votes are
+     append-only, insertable solely through `cast_vote()`.
+   - `admin_users` — RLS on with no policies, so it is unreachable through the API.
+
+## 5. Environment variables
+
+| Variable | Required | Where | Notes |
+| --- | --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | local + Vercel | Supabase → Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | local + Vercel | Supabase → Settings → API. Public by design; RLS is what protects the data. |
+| `NEXT_PUBLIC_ADMIN_HOST` | yes in production | local + Vercel | Hostname only — `admin.yourdomain.com`. No protocol, no trailing slash, no path. |
+| `SUPABASE_SERVICE_ROLE_KEY` | no | never on Vercel | Bypasses RLS entirely. Nothing in the request path uses it. Only for one-off local admin scripts. |
+
+There are no other environment variables, and no hardcoded URLs anywhere — the admin
+host is read from configuration in every place it matters.
+
+## 6. Database migrations
+
+Apply everything in `supabase/migrations/` **in filename order**. Either paste each
+file into the Supabase SQL editor, or use the CLI:
 
 ```bash
-npm test        # unit tests: input validation, error mapping, voter identity
-npm run typecheck
-npm run lint
+supabase link --project-ref <your-project-ref>
+supabase db push
 ```
 
-Business logic lives in Postgres, so it is tested there. Against a local stack
-(`supabase start`) or a scratch project — not production, it creates a live event:
+| Migration | What it does |
+| --- | --- |
+| `0001` | Core schema: events, participants, votes; RLS; indexes |
+| `0002` | Event lifecycle, voting states, scoring view, `get_leaderboard` |
+| `0003` | Admin event-control functions |
+| `0004` | Revokes the execute grants Supabase auto-adds to `anon` |
+| `0005` | Public top-3 reveal after the event finishes |
+| `0006`–`0007` | Realtime publication; reorder / skip / remove controls |
+| `0008` | Closed voting cannot be reopened |
+| `0009` | Removed participants excluded from rankings |
+| `0010` | Input validation as CHECK constraints |
+| `0011` | Consistent lock ordering between voting and admin control |
+| `0012` | Admin allowlist (`admin_users` + `is_admin()`) |
+| `0013` | Tightens function grants so only `cast_vote` and `get_public_top3` are public |
+
+To verify a fresh database, run the business-logic suite (46 assertions; it creates a
+live event, so use a scratch database, not production):
 
 ```bash
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/business-logic.test.sql
 ```
 
-46 assertions covering vote validation, duplicate voting, ranking, tie-breaking,
-event state transitions, participant progression and authorization. It runs in a
-transaction and rolls back.
+## 7. Admin setup
 
-For the full production path (HTTPS, PostgREST, RLS, connection pooling) see
-[Load test](#load-test) below.
+Two steps — **both are required**. A signed-in account that isn't on the allowlist is
+turned away at the dashboard.
 
-## Deploying
+1. **Supabase → Authentication → Users → Add user.** Use a strong password and mark
+   the email confirmed.
+2. **Add that user to the allowlist**, in the SQL editor:
 
-### Supabase
-
-Apply `supabase/migrations/` in order. Then, **manually, once**:
-
-1. **Create the admin account.** Authentication → Users → Add user, with a strong
-   password and email confirmed.
-2. **Add that user to the allowlist.** Nothing works otherwise — a signed-in user
-   who is not on it is turned away at the dashboard.
-   ```sql
-   insert into public.admin_users (user_id, email)
-   select id, email from auth.users where email = 'admin@yourdomain.com';
-   ```
-3. **Disable public signups.** Authentication → Providers → Email → turn off
-   "Enable sign ups". The allowlist means a stray signup gets no privileges, but
-   there is no reason to let strangers create accounts.
-4. **Enable leaked-password protection.** Authentication → Policies.
-5. Confirm Realtime is enabled for `events`, `participants` and `votes`
-   (migrations `0006` and `0007` do this).
-
-### Vercel
-
-Set these environment variables for Production (and Preview, if you use it):
-
-| Variable | Value |
-| --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API |
-| `NEXT_PUBLIC_ADMIN_HOST` | `admin.yourdomain.com` — hostname only, no protocol, no trailing slash |
-
-Do **not** set `SUPABASE_SERVICE_ROLE_KEY` on Vercel. Nothing in the request path
-uses it, and it bypasses RLS entirely.
-
-Add both `yourdomain.com` and `admin.yourdomain.com` to the Vercel project — one
-deployment serves both, and middleware routes by `Host`. If
-`NEXT_PUBLIC_ADMIN_HOST` does not exactly match the admin domain, the admin app
-falls back to being reachable at `yourdomain.com/admin` instead.
-
-Every route that reflects live event state is `force-dynamic`, so no page of it is
-ever served from a static cache.
-
-## Load test
-
-Exercises the real production path end to end. Run it against a **rehearsal
-event**, never the real one — it casts real votes, and nothing is permitted to
-delete votes.
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=... NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
-ADMIN_EMAIL=... ADMIN_PASSWORD=... \
-LOADTEST_CONFIRM=1 node scripts/load-test.mjs --voters 100
+```sql
+insert into public.admin_users (user_id, email)
+select id, email from auth.users where email = 'admin@yourdomain.com';
 ```
 
-Create a throwaway event, start it, open voting, then run the script. It fires
-100 truly concurrent submissions, then 25 simultaneous submissions from a single
-voter, and verifies server-side that exactly 101 votes were stored with no
-duplicates, no misrouting and an average that matches points ÷ count exactly.
-Delete the rehearsal event afterwards.
+To check who currently has admin rights: `select email from public.admin_users;`
 
-## Running an event
+## 8. Running locally
 
-1. Sign in at `admin.yourdomain.com`.
-2. Create the event and add participants (name required; batch and year optional).
-   Reorder before starting.
-3. **Start Event** activates the first performer. Voting begins closed.
-4. **Open Voting** when the performance ends. The audience sees the rating slider.
-5. **Close Voting**, then **Next Participant**. Closing is deliberate and final
-   for that performer — it cannot be reopened, which is what stops late votes.
-6. **Finish Event** when the last performer is done. This reveals the top 3 to the
-   audience and the full final results to you. It asks for confirmation first.
-7. Export CSV from the results view. It contains no voter IDs.
+```bash
+npm run dev          # http://localhost:3000
+```
 
-If the "Reconnecting…" indicator appears, the app is already recovering and will
-re-fetch current state; no action needed.
+- Audience app: `http://localhost:3000`
+- Admin app: `http://localhost:3000/admin`
+
+To exercise the real subdomain split locally, add `admin.localhost` to your hosts file
+and set `NEXT_PUBLIC_ADMIN_HOST=admin.localhost:3000`. Otherwise middleware falls back
+to path-based routing at `/admin`, which is fine for development.
+
+Other commands:
+
+```bash
+npm test             # unit tests: validation, error mapping, voter identity
+npm run typecheck
+npm run lint
+npm run build
+```
+
+## 9. Vercel deployment
+
+1. Import the repository into Vercel. The defaults are correct — it's a standard
+   Next.js project, no build overrides needed.
+2. Add the three `NEXT_PUBLIC_*` variables from section 5 to **Production** (and
+   **Preview**, if you use preview deployments).
+3. Do **not** add `SUPABASE_SERVICE_ROLE_KEY`.
+4. Deploy.
+
+Every route that reflects live event state is `force-dynamic`, so no page of it is
+ever served from a static or edge cache. That is deliberate: a cached page would show
+a stale performer to the room.
+
+## 10. Custom domain setup
+
+In **Vercel → Project → Settings → Domains**, add `yourdomain.com` (and `www` if you
+want it, redirecting to the apex). Follow Vercel's DNS instructions at your registrar
+and wait for the certificate to issue.
+
+## 11. Admin subdomain setup
+
+1. Add `admin.yourdomain.com` as a **second domain on the same Vercel project** — not a
+   separate project. One deployment serves both.
+2. Add the DNS record Vercel asks for (usually a `CNAME` to `cname.vercel-dns.com`).
+3. Set `NEXT_PUBLIC_ADMIN_HOST=admin.yourdomain.com` in Vercel and redeploy.
+
+Middleware reads the `Host` header: on the admin host, `/login` and `/dashboard` are
+served from the admin app; on the public host, the audience app is served and the admin
+app remains reachable at `/admin`.
+
+**If `NEXT_PUBLIC_ADMIN_HOST` does not exactly match the real subdomain**, the admin app
+silently falls back to `yourdomain.com/admin`. It still works and is still protected —
+but it isn't on the subdomain you intended, so check this after deploying.
+
+## 12. Running the live event
+
+See **[OPERATIONS.md](./OPERATIONS.md)** for the event-day runbook.
+
+The loop, in one line: **Start performer → Open voting → watch the count → Close voting
+→ next performer.** Finish the event at the end to reveal the top 3.
+
+## 13. Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| "That account isn't an event administrator" | The user exists in Auth but not in `admin_users`. Run the insert in section 7. |
+| Admin app loads at `/admin` instead of the subdomain | `NEXT_PUBLIC_ADMIN_HOST` doesn't match the real host, or wasn't redeployed after being set. |
+| Audience stuck on "Voting hasn't started yet" | No event is `live`. Start a performer from the dashboard. |
+| "Reconnecting" persists on a phone | That phone lost its Realtime connection. The app re-fetches on reconnect and the audience can still vote. Usually venue WiFi. |
+| A voter says Submit does nothing | They've already rated this performer — the screen will say so. Ratings are one per performer, per device. |
+| "Cannot start event" / duplicate live event | Another event is still `live`. Only one may be live at a time; finish the old one first. |
+| Removing a participant is disabled | They already have ratings. Skip them instead — removing would discard real votes. |
+| Voting won't reopen after closing | Closing is deliberately final for that performer. Advance to the next one. |
+| Dashboard shows an error banner | The action failed and *did not* apply. The message says which one. Retry; the event is unaffected. |
+| Vote counts look frozen for a second | Vote-driven refreshes are coalesced into roughly one per second so a burst of 100 ratings doesn't hammer the database. This is normal. |
+
+### Checking the database directly
+
+```sql
+-- What is live right now?
+select name, status, voting_state, active_participant_id from public.events;
+
+-- Ratings for the current performer
+select count(*), round(avg(rating),2) from public.votes
+where participant_id = (select active_participant_id from public.events where status='live');
+
+-- Final results, straight from the votes
+select * from public.get_leaderboard('<event-id>');
+```
 
 ## Deliberate limits
 
-**Ballot stuffing is not fully preventable while voting is anonymous.** The
-defenses are voter ID + database uniqueness + event/participant validation. A
-determined person who clears site data repeatedly, or scripts against the public
-anon key, can add votes under fresh voter IDs.
+**Ballot stuffing is not fully preventable while voting is anonymous.** The defences
+are voter ID + database uniqueness + event/participant validation. Someone who clears
+site data repeatedly, or scripts against the public anon key, can add votes under
+fresh IDs.
 
-IP-based rate limiting is *not* the answer here and is not implemented: a venue
-full of people shares one NAT'd IP, so any per-IP threshold low enough to matter
-would block the real audience. CAPTCHA was rejected for the same reason — it taxes
-every honest voter to slow an attacker down.
+IP-based rate limiting is *not* the answer here and is not implemented: a venue full
+of people shares one NAT'd IP, so any threshold low enough to matter would block the
+real audience. CAPTCHA was rejected for the same reason — it taxes every honest voter
+to slow an attacker down.
 
-What bounds the risk in practice is that voting is open only for a minute or two
-per performer, and the admin sees live vote counts. A participant whose count is
-wildly out of line with the rest is visible while it is happening.
+What bounds the risk in practice is that voting is open only for a minute or two per
+performer, and the admin can see live vote counts. A performer whose count is wildly
+out of line with the rest is visible while it's happening.

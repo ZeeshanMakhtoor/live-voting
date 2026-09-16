@@ -30,6 +30,9 @@ export const logger = {
   realtimeStatus(fields: { app: "audience" | "admin"; status: string }) {
     emit("warn", "realtime_status", { app: fields.app, status: fields.status });
   },
+  pageError(fields: { surface: "audience" | "admin"; code: string | undefined }) {
+    emit("error", "page_error", { surface: fields.surface, code: fields.code ?? "unknown" });
+  },
   loginFailed() {
     // Deliberately no email/password — just that an attempt failed.
     emit("warn", "admin_login_failed", {});

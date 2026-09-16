@@ -23,27 +23,35 @@ export function CreateEventForm({ onCreate }: CreateEventFormProps) {
   }
 
   return (
-    <div className="mx-auto mt-16 w-full max-w-md border-4 border-foreground p-6">
-      <h1 className="text-xl font-black uppercase tracking-tight">No event yet</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Create the event to start managing participants and live voting.
+    <div className="border-[3px] border-foreground p-6 sm:p-8">
+      <p className="eyebrow">Nothing scheduled</p>
+      <h1 className="font-display mt-2 text-4xl font-black leading-[0.95] tracking-tight">
+        Create the event
+      </h1>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Name it, then build the running order. Nothing is visible to the audience until you start
+        the first performer.
       </p>
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-3">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Event name
-          </span>
+      <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-3">
+        <label className="flex flex-col gap-2">
+          <span className="eyebrow">Event name</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Literary Club — Live Voting"
+            placeholder="Literary Club — Annual Showcase"
             required
             maxLength={200}
-            className="h-11 border-2 border-foreground bg-background px-3 text-sm"
+            className="h-12 border-2 border-foreground bg-background px-3 text-base"
           />
         </label>
-        <Button type="submit" disabled={submitting || !name.trim()} className="mt-1 uppercase">
-          {submitting ? "Creating…" : "Create Event"}
+        <Button
+          type="submit"
+          variant="accent"
+          size="lg"
+          disabled={submitting || !name.trim()}
+          className="mt-2"
+        >
+          {submitting ? "Creating…" : "Create event"}
         </Button>
       </form>
     </div>

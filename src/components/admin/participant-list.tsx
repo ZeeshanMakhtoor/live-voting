@@ -44,29 +44,32 @@ export function ParticipantList({
   const scoreByParticipant = new Map(scores.map((s) => [s.participant_id, s]));
 
   return (
-    <section className="border-4 border-foreground">
-      <header className="border-b-4 border-foreground bg-foreground px-4 py-2">
-        <h2 className="text-sm font-black uppercase tracking-[0.15em] text-background">
-          Participants
+    <section className="h-fit border-[3px] border-foreground">
+      <header className="flex items-center justify-between gap-3 border-b-[3px] border-foreground bg-foreground px-4 py-2.5">
+        <h2 className="font-display text-base font-black uppercase tracking-[0.1em] text-background">
+          Running order
         </h2>
+        <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-background/70">
+          {visible.length} {visible.length === 1 ? "participant" : "participants"}
+        </p>
       </header>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
-            <tr className="border-b-2 border-foreground text-left uppercase tracking-wide text-muted-foreground">
-              <th className="px-3 py-2 font-bold">#</th>
-              <th className="px-3 py-2 font-bold">Name</th>
-              <th className="px-3 py-2 font-bold">Batch</th>
-              <th className="px-3 py-2 font-bold">Year</th>
-              <th className="px-3 py-2 font-bold">Status</th>
-              <th className="px-3 py-2 font-bold">Votes</th>
-              <th className="px-3 py-2 font-bold">Avg</th>
-              <th className="px-3 py-2 font-bold">Actions</th>
+            <tr className="border-b-2 border-foreground text-left [&>th]:px-3 [&>th]:py-2 [&>th]:text-[0.65rem] [&>th]:font-bold [&>th]:uppercase [&>th]:tracking-[0.15em] [&>th]:text-muted-foreground">
+              <th scope="col">#</th>
+              <th scope="col">Name</th>
+              <th scope="col">Batch</th>
+              <th scope="col">Year</th>
+              <th scope="col">Status</th>
+              <th scope="col">Votes</th>
+              <th scope="col">Avg</th>
+              <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((p, idx) => {
+            {visible.map((p) => {
               const isActive = p.id === activeParticipantId;
               const score = scoreByParticipant.get(p.id);
               const hasVotes = (score?.vote_count ?? 0) > 0;
@@ -95,8 +98,10 @@ export function ParticipantList({
                     isActive && "bg-accent/10",
                   )}
                 >
-                  <td className="px-3 py-2 font-mono tabular-nums">
-                    {String(p.display_order).padStart(2, "0")}
+                  <td className="px-3 py-2">
+                    <span className="numeral text-lg text-muted-foreground">
+                      {String(p.display_order).padStart(2, "0")}
+                    </span>
                   </td>
                   <td className="px-3 py-2 font-bold">
                     {p.name}
@@ -119,25 +124,26 @@ export function ParticipantList({
                         type="button"
                         disabled={busy}
                         onClick={() => onMove(p.id, "up")}
-                        title="Move up"
-                        className="border border-foreground px-1.5 py-0.5 text-xs disabled:opacity-40"
+                        aria-label={`Move ${p.name} earlier in the running order`}
+                        className="border border-foreground px-2 py-0.5 text-xs hover:bg-foreground/5 disabled:opacity-40"
                       >
-                        ↑
+                        <span aria-hidden>↑</span>
                       </button>
                       <button
                         type="button"
                         disabled={busy}
                         onClick={() => onMove(p.id, "down")}
-                        title="Move down"
-                        className="border border-foreground px-1.5 py-0.5 text-xs disabled:opacity-40"
+                        aria-label={`Move ${p.name} later in the running order`}
+                        className="border border-foreground px-2 py-0.5 text-xs hover:bg-foreground/5 disabled:opacity-40"
                       >
-                        ↓
+                        <span aria-hidden>↓</span>
                       </button>
                       <button
                         type="button"
                         disabled={busy}
                         onClick={() => setEditingId(p.id)}
-                        className="border border-foreground px-1.5 py-0.5 text-xs uppercase disabled:opacity-40"
+                        aria-label={`Edit ${p.name}`}
+                        className="border border-foreground px-2 py-0.5 text-xs font-bold uppercase tracking-wide hover:bg-foreground/5 disabled:opacity-40"
                       >
                         Edit
                       </button>
@@ -146,7 +152,8 @@ export function ParticipantList({
                           type="button"
                           disabled={busy || p.status === "active"}
                           onClick={() => onStart(p.id)}
-                          className="border border-foreground px-1.5 py-0.5 text-xs uppercase disabled:opacity-40"
+                          aria-label={`Start ${p.name}`}
+                          className="border border-foreground px-2 py-0.5 text-xs font-bold uppercase tracking-wide hover:bg-foreground/5 disabled:opacity-40"
                         >
                           Start
                         </button>
@@ -156,7 +163,8 @@ export function ParticipantList({
                           type="button"
                           disabled={busy}
                           onClick={() => onSkip(p.id)}
-                          className="border border-foreground px-1.5 py-0.5 text-xs uppercase disabled:opacity-40"
+                          aria-label={`Skip ${p.name}`}
+                          className="border border-foreground px-2 py-0.5 text-xs font-bold uppercase tracking-wide hover:bg-foreground/5 disabled:opacity-40"
                         >
                           Skip
                         </button>
@@ -164,9 +172,13 @@ export function ParticipantList({
                       <button
                         type="button"
                         disabled={busy || hasVotes}
-                        title={hasVotes ? "Cannot remove — has recorded votes" : undefined}
                         onClick={() => onRemove(p.id)}
-                        className="border border-destructive px-1.5 py-0.5 text-xs uppercase text-destructive disabled:opacity-40"
+                        aria-label={
+                          hasVotes
+                            ? `${p.name} cannot be removed because ratings have been recorded`
+                            : `Remove ${p.name}`
+                        }
+                        className="border border-destructive px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-destructive hover:bg-destructive hover:text-destructive-foreground disabled:opacity-40"
                       >
                         Remove
                       </button>
@@ -177,8 +189,11 @@ export function ParticipantList({
             })}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
-                  No participants yet — add one below.
+                <td colSpan={8} className="px-3 py-10 text-center">
+                  <p className="eyebrow">Empty running order</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Add your first participant below to build the running order.
+                  </p>
                 </td>
               </tr>
             )}
@@ -310,12 +325,10 @@ function AddParticipantForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-wrap items-end gap-3 border-t-4 border-foreground p-4"
+      className="flex flex-wrap items-end gap-3 border-t-[3px] border-foreground p-4"
     >
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          Name
-        </span>
+        <span className="eyebrow">Name</span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -326,9 +339,7 @@ function AddParticipantForm({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          Batch
-        </span>
+        <span className="eyebrow">Batch</span>
         <input
           value={batch}
           onChange={(e) => setBatch(e.target.value)}
@@ -338,9 +349,7 @@ function AddParticipantForm({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          Year
-        </span>
+        <span className="eyebrow">Year</span>
         <input
           value={year}
           onChange={(e) => setYear(e.target.value)}
@@ -350,11 +359,11 @@ function AddParticipantForm({
           className="h-10 w-24 border-2 border-foreground bg-background px-2 text-sm"
         />
       </label>
-      <Button type="submit" disabled={busy || submitting || !name.trim()} className="uppercase">
-        {submitting ? "Adding…" : "Add Participant"}
+      <Button type="submit" variant="outline" disabled={busy || submitting || !name.trim()}>
+        {submitting ? "Adding…" : "Add participant"}
       </Button>
       {error && (
-        <p role="alert" className="w-full text-xs font-medium text-destructive">
+        <p role="alert" className="w-full text-sm font-bold text-destructive">
           {error}
         </p>
       )}
