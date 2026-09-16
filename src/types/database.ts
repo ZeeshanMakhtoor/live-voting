@@ -20,6 +20,7 @@ export type RpcErrorCode =
   | "PARTICIPANT_NOT_ACTIVE"
   | "PARTICIPANT_REMOVED"
   | "EVENT_NOT_FOUND"
+  | "EVENT_IS_LIVE"
   | "EVENT_NOT_LIVE"
   | "EVENT_FINISHED"
   | "VOTING_NOT_OPEN"
@@ -177,6 +178,10 @@ export interface Database {
       is_admin: {
         Args: Record<string, never>;
         Returns: boolean;
+      };
+      admin_delete_event: {
+        Args: { p_event_id: string };
+        Returns: undefined;
       };
       admin_start_participant: {
         Args: { p_event_id: string; p_participant_id: string };

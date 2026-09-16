@@ -199,7 +199,8 @@ export function AdminDashboard({
       | "admin_open_voting"
       | "admin_pause_voting"
       | "admin_close_voting"
-      | "admin_finish_event",
+      | "admin_finish_event"
+      | "admin_delete_event",
     args:
       | { p_event_id: string }
       | { p_event_id: string; p_participant_id: string }
@@ -214,6 +215,14 @@ export function AdminDashboard({
       logger.adminActionFailed({ action, code: error.message });
       return;
     }
+    await refresh();
+  }
+
+  async function handleDeleteEvent() {
+    if (!event) return;
+    setStartingNewEvent(false);
+    await callRpc("deleteEvent", "admin_delete_event", { p_event_id: event.id });
+    setEvent(null);
     await refresh();
   }
 
@@ -464,7 +473,84 @@ export function AdminDashboard({
               </Button>
             )}
           </div>
+
+          {event.status !== "live" && (
+            <DeleteEventPanel
+              eventName={event.name}
+              busy={busy}
+              onDelete={handleDeleteEvent}
+            />
+          )}
         </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Deleting an event cascades to every participant and every vote and cannot
+ * be undone, so this asks for the event's name to be typed rather than
+ * accepting a single tap. A live event has no delete control at all, and
+ * admin_delete_event refuses one regardless of what the UI offers.
+ */
+function DeleteEventPanel({
+  eventName,
+  busy,
+  onDelete,
+}: {
+  eventName: string;
+  busy: boolean;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const matches = typed.trim() === eventName.trim();
+
+  if (!open) {
+    return (
+      <div className="mt-4 border-t-2 border-destructive/30 pt-4">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-xs font-bold uppercase tracking-[0.12em] text-destructive underline underline-offset-4"
+        >
+          Delete this event
+        </button>
+        <p className="mt-1 text-xs text-muted-foreground">
+          For clearing out rehearsals. Removes the event and every rating on it.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 border-t-2 border-destructive/30 pt-4">
+      <p className="text-sm font-bold text-destructive">
+        This permanently deletes “{eventName}” and every rating recorded on it.
+      </p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        It cannot be undone. Type the event name to confirm.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          placeholder={eventName}
+          aria-label={`Type ${eventName} to confirm deletion`}
+          className="h-11 min-w-[14rem] flex-1 border-2 border-destructive bg-background px-3 text-base"
+        />
+        <Button variant="destructive" disabled={!matches || busy} onClick={onDelete}>
+          {busy ? "Deleting…" : "Delete permanently"}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setOpen(false);
+            setTyped("");
+          }}
+        >
+          Cancel
+        </Button>
       </div>
     </div>
   );

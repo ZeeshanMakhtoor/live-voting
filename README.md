@@ -120,6 +120,7 @@ supabase db push
 | `0011` | Consistent lock ordering between voting and admin control |
 | `0012` | Admin allowlist (`admin_users` + `is_admin()`) |
 | `0013` | Tightens function grants so only `cast_vote` and `get_public_top3` are public |
+| `0014` | `admin_delete_event`, which refuses to delete a live event |
 
 To verify a fresh database, run the business-logic suite (46 assertions; it creates a
 live event, so use a scratch database, not production):

@@ -21,9 +21,14 @@ export type AdminAction =
   | "pauseVoting"
   | "resumeVoting"
   | "closeVoting"
-  | "finishEvent";
+  | "finishEvent"
+  | "deleteEvent";
 
 const ACTION_MESSAGES: Partial<Record<AdminAction, Partial<Record<RpcErrorCode, string>>>> = {
+  deleteEvent: {
+    EVENT_IS_LIVE: "A live event can't be deleted. Finish it first.",
+    EVENT_NOT_FOUND: "That event no longer exists.",
+  },
   startParticipant: {
     PARTICIPANT_REMOVED: "Cannot start a removed participant.",
     EVENT_FINISHED: "This event has already finished.",
@@ -81,6 +86,7 @@ const GENERIC_FALLBACKS: Record<AdminAction, string> = {
   resumeVoting: "Could not resume voting. Please try again.",
   closeVoting: "Could not close voting. Please try again.",
   finishEvent: "Could not finish the event. Please try again.",
+  deleteEvent: "Could not delete the event. Please try again.",
 };
 
 export function friendlyAdminError(action: AdminAction, rawMessage: string | undefined | null): string {
