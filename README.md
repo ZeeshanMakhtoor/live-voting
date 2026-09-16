@@ -179,6 +179,21 @@ Every route that reflects live event state is `force-dynamic`, so no page of it 
 ever served from a static or edge cache. That is deliberate: a cached page would show
 a stale performer to the room.
 
+### Function region
+
+`vercel.json` pins Serverless Functions to `bom1` (Mumbai) to sit next to the
+Supabase project in `ap-south-1`. This matters more than it looks: rendering the
+audience page makes two *sequential* Supabase queries, so a mismatched region pays
+that round trip twice per page load. The project defaulted to `iad1` (Washington
+DC), which meant every load crossed Virginia↔Mumbai and back, twice, for queries
+that execute in under 5ms.
+
+**If you move the Supabase project, change this to match it.** Co-locating the
+function with the database beats co-locating it with the audience, because the
+database round trips are multiplied while the user's hop to the function is paid
+once. Confirm under Vercel → Settings → Functions after deploying; on a plan that
+restricts region selection, set it there instead and remove the field here.
+
 ## 10. Custom domain setup
 
 In **Vercel → Project → Settings → Domains**, add `yourdomain.com` (and `www` if you
