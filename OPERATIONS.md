@@ -91,6 +91,31 @@ votes.
    name, batch, year, average, vote count and total points — no voter identities.
 6. Announce the winners from the dashboard, not from memory.
 
+## Starting another event
+
+After you finish an event, the dashboard stays on its final results — they don't
+disappear. To run another one, press **Start a new event** in the *End of event*
+box. The previous event keeps its results; you can't get back to them from the
+dashboard once a newer event exists, but they remain in the database and in any
+CSV you exported.
+
+**Clearing out rehearsal events.** There is deliberately no delete button — one
+mis-tap during a live event would destroy real results. To remove test events,
+run this in the Supabase SQL editor (it cascades to their participants and
+votes, and cannot be undone):
+
+```sql
+-- Check what you are about to remove first.
+select id, name, status, created_at,
+       (select count(*) from public.votes v where v.event_id = e.id) as votes
+from public.events e order by created_at;
+
+-- Then delete by name, or by id for precision.
+delete from public.events where name = 'my test event';
+```
+
+Do this *before* the real event, never during.
+
 ## If something goes wrong
 
 | What you see | What to do |

@@ -73,6 +73,10 @@ export function AdminDashboard({
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [realtimeIssue, setRealtimeIssue] = useState(false);
+  // A finished event otherwise pins the dashboard forever: refresh() falls
+  // back live -> draft -> finished, so once the last event is finished
+  // there is no way to reach the create form again.
+  const [startingNewEvent, setStartingNewEvent] = useState(false);
 
   const refresh = useCallback(async () => {
     const { data: liveEvent } = await supabase
@@ -226,6 +230,7 @@ export function AdminDashboard({
       return;
     }
     setEvent(data);
+    setStartingNewEvent(false);
   }
 
   async function handleAddParticipant(values: { name: string; batch: string; year: string }) {
@@ -288,12 +293,21 @@ export function AdminDashboard({
     });
   }
 
-  if (!event) {
+  if (!event || startingNewEvent) {
     return (
       <div className="min-h-viewport">
         <DashboardHeader onLogout={handleLogout} realtimeIssue={realtimeIssue} />
         <div className="mx-auto max-w-2xl px-4 py-10">
           <CreateEventForm onCreate={handleCreateEvent} />
+          {event && (
+            <button
+              type="button"
+              onClick={() => setStartingNewEvent(false)}
+              className="mt-4 text-sm font-bold uppercase tracking-wide underline underline-offset-4"
+            >
+              ← Back to {event.name}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -424,25 +438,31 @@ export function AdminDashboard({
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {isFinished
-                  ? "This event is finished. Results below are final."
+                  ? "This event is finished. Results below are final, and stay available here."
                   : "Closes voting permanently and reveals the top 3 to the audience."}
               </p>
             </div>
-            <Button
-              variant="destructive"
-              disabled={busy || isFinished}
-              onClick={() => {
-                if (
-                  !window.confirm(
-                    "Are you sure you want to finish this event? Voting will no longer be available.",
+            {isFinished ? (
+              <Button variant="outline" onClick={() => setStartingNewEvent(true)}>
+                Start a new event
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      "Are you sure you want to finish this event? Voting will no longer be available.",
+                    )
                   )
-                )
-                  return;
-                void callRpc("finishEvent", "admin_finish_event", { p_event_id: event.id });
-              }}
-            >
-              {isFinished ? "Event finished" : "Finish event"}
-            </Button>
+                    return;
+                  void callRpc("finishEvent", "admin_finish_event", { p_event_id: event.id });
+                }}
+              >
+                Finish event
+              </Button>
+            )}
           </div>
         </section>
       </div>

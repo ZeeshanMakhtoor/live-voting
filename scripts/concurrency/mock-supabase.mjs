@@ -125,6 +125,11 @@ const server = http.createServer((req, res) => {
     if (p === "/__test/reset") {
       state.votes.clear(); state.rejected = [];
       state.event.voting_state = url.searchParams.get("voting") ?? "open";
+      const status = url.searchParams.get("status");
+      if (status) {
+        state.event.status = status;
+        if (status === "finished") state.event.active_participant_id = null;
+      }
       return send(res, 200, { ok: true }, req);
     }
 
