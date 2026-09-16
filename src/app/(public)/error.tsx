@@ -10,7 +10,7 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
   }, [error]);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col">
+    <div className="flex min-h-viewport flex-col">
       <header className="rule-thick">
         <div className="mx-auto flex w-full max-w-lg items-center justify-between px-4 py-3">
           <p className="text-[0.7rem] font-bold uppercase tracking-[0.3em]">Literary Club</p>

@@ -183,7 +183,7 @@ export function AudienceApp({ initialEvent, initialParticipant, initialTop3 }: A
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col">
+    <div className="flex min-h-viewport flex-col">
       <Masthead realtimeIssue={realtimeIssue} />
 
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 py-8">

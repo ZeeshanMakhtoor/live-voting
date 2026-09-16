@@ -236,6 +236,35 @@ where participant_id = (select active_participant_id from public.events where st
 select * from public.get_leaderboard('<event-id>');
 ```
 
+## Browser support
+
+Verified in Chromium. Firefox and WebKit could not be run in the environment
+this was built in, so their behaviour is reasoned from feature support rather
+than observed — worth a two-minute check on a real iPhone and a real Android
+phone before the event.
+
+The floor is roughly **iOS Safari 15.4+, Chrome 93+, Firefox 92+** — anything
+from early 2022 onward. iOS 15.4 runs on the iPhone 6s and newer, so in
+practice every phone in the room qualifies.
+
+Deliberate choices that keep that floor low:
+
+- Fonts are declared `format("woff2")`, not the non-standard
+  `format("woff2-variations")`. Browsers that don't recognise a format string
+  skip that source entirely, which would drop the whole page to fallback
+  fonts.
+- The rating tiles style focus through a sibling selector rather than
+  `:has()`, which Firefox only shipped in December 2023. The radio inputs are
+  visually hidden, so on a browser without `:has()` a keyboard voter would
+  have had no focus indicator at all.
+- `100dvh` is paired with a `100vh` fallback. An unsupported declaration is
+  dropped, and without the fallback those browsers get no min-height.
+- `getVoterId()` degrades through `crypto.randomUUID` → `getRandomValues` →
+  `Math.random`, and survives `localStorage` being blocked entirely.
+
+Below that floor the app degrades rather than breaking: focus rings stop
+showing (`:focus-visible`), but voting still works.
+
 ## Deliberate limits
 
 **Ballot stuffing is not fully preventable while voting is anonymous.** The defences

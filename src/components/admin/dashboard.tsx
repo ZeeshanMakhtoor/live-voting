@@ -290,7 +290,7 @@ export function AdminDashboard({
 
   if (!event) {
     return (
-      <div className="min-h-[100dvh]">
+      <div className="min-h-viewport">
         <DashboardHeader onLogout={handleLogout} realtimeIssue={realtimeIssue} />
         <div className="mx-auto max-w-2xl px-4 py-10">
           <CreateEventForm onCreate={handleCreateEvent} />
@@ -312,7 +312,7 @@ export function AdminDashboard({
   const isFinished = event.status === "finished";
 
   return (
-    <div className="min-h-[100dvh]">
+    <div className="min-h-viewport">
       <DashboardHeader onLogout={handleLogout} realtimeIssue={realtimeIssue} />
 
       <div className="mx-auto max-w-6xl px-4 py-6">
