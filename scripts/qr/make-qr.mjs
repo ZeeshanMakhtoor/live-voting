@@ -78,7 +78,7 @@ const poster = `<!doctype html>
     <p class="url-label">Or open</p>
     <p class="url">${url.replace(/^https?:\/\//, "")}</p>
   </main>
-  <footer>One vote per performer &nbsp;·&nbsp; No sign-in needed</footer>
+  <footer>One vote per performer</footer>
 </body>
 </html>`;
 await writeFile(`${OUT}/vote-poster.html`, poster);
