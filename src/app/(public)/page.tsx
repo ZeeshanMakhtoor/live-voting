@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { AudienceApp, type EventState, type ParticipantState, type TopRow } from "@/components/audience-app";
+import { AudienceApp, type EventState, type ParticipantState } from "@/components/audience-app";
 
 // This page reflects live event state that can change at any moment via
 // admin action; it must never be statically prerendered/cached (see the
@@ -38,11 +38,5 @@ export default async function AudienceHomePage() {
     participant = p ?? null;
   }
 
-  let top3: TopRow[] | null = null;
-  if (event?.status === "finished") {
-    const { data: rows } = await supabase.rpc("get_public_top3", { p_event_id: event.id });
-    top3 = rows ?? [];
-  }
-
-  return <AudienceApp initialEvent={event} initialParticipant={participant} initialTop3={top3} />;
+  return <AudienceApp initialEvent={event} initialParticipant={participant} />;
 }

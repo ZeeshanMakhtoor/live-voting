@@ -17,8 +17,9 @@ their own phone. No login, no app install, no account.
   the running order, advance performers, open and close voting, watch live stats,
   finish the event and export results.
 
-When the admin finishes the event, the audience sees the top 3 and the admin sees
-full final results with a CSV export.
+Results are never shown to the audience — not while voting is open, not once the
+event finishes. Standings are visible only on the admin dashboard, with a CSV
+export. When the event finishes, voters see a closing message and nothing more.
 
 ## 2. Architecture
 
@@ -82,6 +83,8 @@ cp .env.example .env.local     # fill in the two NEXT_PUBLIC_ values
    - `participants` — anon may read participants of a `live` event; admins may do anything.
    - `votes` — **no anon policy at all**, and admins get `SELECT` only. Votes are
      append-only, insertable solely through `cast_vote()`.
+   - `participant_scores` — no anon grant, and `security_invoker` is on, so it
+     cannot be used to read standings.
    - `admin_users` — RLS on with no policies, so it is unreachable through the API.
 
 ## 5. Environment variables
@@ -112,15 +115,16 @@ supabase db push
 | `0002` | Event lifecycle, voting states, scoring view, `get_leaderboard` |
 | `0003` | Admin event-control functions |
 | `0004` | Revokes the execute grants Supabase auto-adds to `anon` |
-| `0005` | Public top-3 reveal after the event finishes |
+| `0005` | Lets the audience see that an event has finished (superseded by `0015`) |
 | `0006`–`0007` | Realtime publication; reorder / skip / remove controls |
 | `0008` | Closed voting cannot be reopened |
 | `0009` | Removed participants excluded from rankings |
 | `0010` | Input validation as CHECK constraints |
 | `0011` | Consistent lock ordering between voting and admin control |
 | `0012` | Admin allowlist (`admin_users` + `is_admin()`) |
-| `0013` | Tightens function grants so only `cast_vote` and `get_public_top3` are public |
+| `0013` | Tightens function grants on the anon-callable surface |
 | `0014` | `admin_delete_event`, which refuses to delete a live event |
+| `0015` | Removes the public results function; `cast_vote` is the only anon-callable function |
 
 To verify a fresh database, run the business-logic suite (46 assertions; it creates a
 live event, so use a scratch database, not production):
@@ -221,7 +225,7 @@ but it isn't on the subdomain you intended, so check this after deploying.
 See **[OPERATIONS.md](./OPERATIONS.md)** for the event-day runbook.
 
 The loop, in one line: **Start performer → Open voting → watch the count → Close voting
-→ next performer.** Finish the event at the end to reveal the top 3.
+→ next performer.** Finish the event at the end to close voting for good.
 
 ## 13. Troubleshooting
 

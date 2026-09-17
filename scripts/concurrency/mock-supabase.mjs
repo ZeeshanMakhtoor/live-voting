@@ -128,7 +128,10 @@ const server = http.createServer((req, res) => {
       const status = url.searchParams.get("status");
       if (status) {
         state.event.status = status;
-        if (status === "finished") state.event.active_participant_id = null;
+        // Finishing clears the stage; anything else puts performer 1 back on
+        // it, so a reset is a genuine reset rather than a one-way door.
+        state.event.active_participant_id =
+          status === "finished" ? null : state.participants[0].id;
       }
       return send(res, 200, { ok: true }, req);
     }
@@ -137,9 +140,6 @@ const server = http.createServer((req, res) => {
     if (p === "/auth/v1/token") return send(res, 200, { access_token: "t", refresh_token: "r", user: { id: "admin" } }, req);
     if (p === "/rest/v1/rpc/is_admin") return send(res, 200, true, req);
     if (p === "/rest/v1/rpc/get_leaderboard") return send(res, 200, leaderboard(), req);
-    if (p === "/rest/v1/rpc/get_public_top3") {
-      return send(res, 200, leaderboard().slice(0, 3).map((r) => ({ rank: r.rank, name: r.name })), req);
-    }
     if (p.startsWith("/rest/v1/rpc/")) return send(res, 200, null, req);
 
     if (p === "/rest/v1/events") {

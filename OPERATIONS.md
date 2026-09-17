@@ -85,11 +85,11 @@ votes.
 1. Close voting for the final performer.
 2. Press **Finish event** in the red *End of event* box at the bottom. Confirm the
    prompt. **This is irreversible** — voting ends for everyone.
-3. The audience screen changes to **Event complete** with the top 3.
+3. The audience screen changes to a closing message. **It shows no results** — voters never see standings, during the event or after.
 4. The dashboard switches to **Final results**.
 5. Press **Export CSV** and save the file before closing the laptop. It contains rank,
    name, batch, year, average, vote count and total points — no voter identities.
-6. Announce the winners from the dashboard, not from memory.
+6. Announce the outcome yourself. The app never shows it to the room.
 
 ## Starting another event
 

@@ -225,10 +225,7 @@ begin
   perform pg_temp.check('removed participants are excluded from the leaderboard',
     not exists (select 1 from public.get_leaderboard(ev) where participant_id = p3));
 
-  -- ── results reveal ───────────────────────────────────────────────────
-  select count(*) into n from public.get_public_top3(ev);
-  perform pg_temp.check('top 3 is hidden before the event is finished', n = 0);
-
+  -- ── the audience must never see results ──────────────────────────────
   perform public.admin_finish_event(ev);
   perform pg_temp.check('finishing closes voting and clears the active participant',
     (select status = 'finished' and voting_state = 'closed' and active_participant_id is null
@@ -236,14 +233,30 @@ begin
   perform pg_temp.check_raises('no votes accepted after the event is finished',
     format('select public.cast_vote(%L,%L,5::smallint)', p1, 'voter_dddddddddddd'), 'EVENT_NOT_LIVE');
 
-  -- Alpha, Bravo and Delta remain rankable; Charlie was removed above.
-  select count(*) into n from public.get_public_top3(ev);
-  perform pg_temp.check('top 3 is revealed once finished', n = 3);
+  perform pg_temp.check('no results function is reachable by anyone',
+    not exists (select 1 from pg_proc pr join pg_namespace ns on ns.oid = pr.pronamespace
+                where ns.nspname = 'public' and pr.proname = 'get_public_top3'));
 
-  for r in select * from public.get_public_top3(ev) loop
-    perform pg_temp.check('public top 3 exposes rank and name only, never scores',
-      to_jsonb(r) ?& array['rank','name'] and not (to_jsonb(r) ?| array['average_rating','vote_count','voter_id']));
-  end loop;
+  -- The only thing anon may call is cast_vote. Anything else that could
+  -- expose a standing must be unreachable.
+  set local role anon;
+  set local request.jwt.claims = '{"role":"anon"}';
+  perform pg_temp.check_raises('anon cannot read the leaderboard after the event',
+    format('select public.get_leaderboard(%L)', ev), 'permission denied for function get_leaderboard');
+  select count(*) into n from public.votes;
+  perform pg_temp.check('anon still cannot read any vote once finished', n = 0);
+  begin
+    select count(*) into n from public.participant_scores;
+    perform pg_temp.check('anon cannot read participant_scores', n = 0);
+  exception when others then
+    perform pg_temp.check('anon cannot read participant_scores', true);
+  end;
+  reset role;
+
+  perform pg_temp.check('exactly one function is anon-callable (cast_vote)',
+    (select count(*) from pg_proc pr join pg_namespace ns on ns.oid = pr.pronamespace
+     where ns.nspname = 'public' and pr.prokind = 'f'
+       and has_function_privilege('anon', pr.oid, 'EXECUTE')) = 1);
 
   raise notice '────────────────────────';
   raise notice 'ALL TESTS PASSED';

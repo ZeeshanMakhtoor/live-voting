@@ -1,0 +1,14 @@
+-- Results are never shown to the audience — not during the event, not at
+-- the end. get_public_top3 was the only path by which an audience device
+-- could reach any standing, so it is removed outright rather than merely
+-- hidden in the UI: the anon key is public and RPCs are callable directly,
+-- so a client-side change alone would leave the endpoint live.
+--
+-- After this, the entire anon-callable surface is one function: cast_vote.
+--
+-- The remaining audience-readable data is checked and deliberate:
+--   events       - status/voting_state only, so the app knows what to show
+--   participants - the running order of a live event; carries no scores
+--   votes        - RLS with no anon policy, so it returns nothing
+--   participant_scores - no anon grant, and security_invoker is on
+drop function if exists public.get_public_top3(uuid);

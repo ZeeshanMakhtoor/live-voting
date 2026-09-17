@@ -26,26 +26,19 @@ export interface ParticipantState {
   year: string | null;
 }
 
-export interface TopRow {
-  rank: number;
-  name: string;
-}
-
 interface AudienceAppProps {
   initialEvent: EventState | null;
   initialParticipant: ParticipantState | null;
-  initialTop3: TopRow[] | null;
 }
 
 const PARTICIPANT_FIELDS = "id, name, batch, year";
 
-export function AudienceApp({ initialEvent, initialParticipant, initialTop3 }: AudienceAppProps) {
+export function AudienceApp({ initialEvent, initialParticipant }: AudienceAppProps) {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
 
   const [event, setEvent] = useState(initialEvent);
   const [participant, setParticipant] = useState(initialParticipant);
-  const [top3, setTop3] = useState(initialTop3);
   const [voterId, setVoterId] = useState<string | null>(null);
   const [rating, setRating] = useState<Rating | null>(null);
   const [submitState, setSubmitState] = useState<"idle" | "submitting" | "error">("idle");
@@ -98,14 +91,6 @@ export function AudienceApp({ initialEvent, initialParticipant, initialTop3 }: A
       setParticipant(null);
     }
 
-    if (nextEvent?.status === "finished") {
-      const { data: rows } = await supabase.rpc("get_public_top3", {
-        p_event_id: nextEvent.id,
-      });
-      setTop3(rows ?? []);
-    } else {
-      setTop3(null);
-    }
   }, [supabase]);
 
   useEffect(() => {
@@ -190,7 +175,6 @@ export function AudienceApp({ initialEvent, initialParticipant, initialTop3 }: A
         <AudienceContent
           event={event}
           participant={participant}
-          top3={top3}
           rating={rating}
           onRatingChange={setRating}
           votedReason={votedReason}
@@ -270,7 +254,6 @@ function ParticipantHeader({ participant }: { participant: ParticipantState }) {
 interface AudienceContentProps {
   event: EventState | null;
   participant: ParticipantState | null;
-  top3: TopRow[] | null;
   rating: Rating | null;
   onRatingChange: (r: Rating) => void;
   votedReason: "submitted" | "already_voted" | null;
@@ -283,7 +266,6 @@ interface AudienceContentProps {
 function AudienceContent({
   event,
   participant,
-  top3,
   rating,
   onRatingChange,
   votedReason,
@@ -304,7 +286,7 @@ function AudienceContent({
   }
 
   if (event.status === "finished") {
-    return <FinalResults top3={top3} />;
+    return <VotingClosed />;
   }
 
   if (!participant) {
@@ -323,12 +305,12 @@ function AudienceContent({
         <ParticipantHeader participant={participant} />
         <div className="mt-8 border-[3px] border-accent bg-accent px-6 py-10 text-center text-accent-foreground">
           <p className="font-display text-3xl font-black leading-tight sm:text-4xl">
-            {votedReason === "already_voted" ? "Already rated." : "Rating submitted."}
+            {votedReason === "already_voted" ? "Already voted." : "Thank you for voting."}
           </p>
           <p className="mt-3 text-sm opacity-90">
             {votedReason === "already_voted"
-              ? "You've already rated this performer."
-              : "Thank you — your rating is recorded."}
+              ? "You've already voted for this performer."
+              : "Your vote has been recorded."}
           </p>
         </div>
         <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -346,12 +328,12 @@ function AudienceContent({
           ? {
               eyebrow: "Closed",
               headline: "Voting has closed.",
-              detail: "Ratings for this performer are final.",
+              detail: "Voting for this performer is now final.",
             }
           : {
               eyebrow: "Standing by",
               headline: "Voting opens shortly.",
-              detail: "Rate as soon as the performance ends.",
+              detail: "You can vote as soon as the performance ends.",
             };
     return (
       <div>
@@ -368,7 +350,7 @@ function AudienceContent({
       <ParticipantHeader participant={participant} />
 
       <div className="mt-8">
-        <p className="eyebrow">Rate this performance</p>
+        <p className="eyebrow">Vote for this performance</p>
         <div className="mt-4">
           <RatingScale
             name="rating"
@@ -399,56 +381,27 @@ function AudienceContent({
         {submitState === "submitting"
           ? "Submitting…"
           : rating === null
-            ? "Select a rating"
-            : `Submit ${rating}`}
+            ? "Choose a score above"
+            : "Submit your vote"}
       </Button>
 
       <p className="mt-6 text-center text-xs uppercase tracking-[0.15em] text-muted-foreground">
-        One rating per performer
+        One vote per performer
       </p>
 
       <p aria-live="polite" className="sr-only">
-        {submitState === "submitting" ? "Submitting your rating" : ""}
+        {submitState === "submitting" ? "Submitting your vote" : ""}
       </p>
     </div>
   );
 }
 
-function FinalResults({ top3 }: { top3: TopRow[] | null }) {
+function VotingClosed() {
   return (
-    <div>
-      <div className="border-b-[3px] border-foreground pb-6 text-center">
-        <p className="eyebrow">The end</p>
-        <p className="font-display mt-2 text-4xl font-black leading-[0.95] sm:text-5xl">
-          Event complete
-        </p>
-        <p className="mt-3 text-sm text-muted-foreground">Thank you for voting.</p>
-      </div>
-
-      {top3 && top3.length > 0 ? (
-        <div className="mt-8">
-          <p className="eyebrow text-center">Top 3</p>
-          <ol className="mt-4">
-            {top3.map((row) => (
-              <li
-                key={row.rank}
-                className="flex items-center gap-5 border-b-2 border-foreground py-4 last:border-b-0"
-              >
-                <span className="numeral w-14 shrink-0 text-5xl leading-none text-accent sm:text-6xl">
-                  {row.rank}
-                </span>
-                <span className="font-display text-xl font-black uppercase leading-tight sm:text-2xl">
-                  {row.name}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : (
-        <p className="mt-8 text-center text-sm text-muted-foreground">
-          Final results will appear here shortly.
-        </p>
-      )}
-    </div>
+    <Notice
+      eyebrow="That's a wrap"
+      headline="Voting has closed."
+      detail="Thank you for taking part. Results will be announced at the event."
+    />
   );
 }

@@ -13,7 +13,8 @@ interface RatingScaleProps {
 }
 
 /**
- * Five large numeral tiles backed by real radio inputs.
+ * Five large numeral tiles backed by real radio inputs — the voter's score
+ * for the performance currently on stage.
  *
  * Native radios do the accessibility work: one tab stop for the whole
  * scale, arrow keys to move between values, and a screen reader that
@@ -35,7 +36,7 @@ interface RatingScaleProps {
 export function RatingScale({ name, value, onChange, disabled }: RatingScaleProps) {
   return (
     <fieldset disabled={disabled} className="w-full border-0 p-0">
-      <legend className="sr-only">Rate this performance from 1 (poor) to 5 (excellent)</legend>
+      <legend className="sr-only">Vote for this performance, from 1 (fair) to 5 (outstanding)</legend>
 
       <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
         {VALUES.map((n) => {
@@ -73,8 +74,8 @@ export function RatingScale({ name, value, onChange, disabled }: RatingScaleProp
       </div>
 
       <div className="mt-2 flex justify-between">
-        <span className="eyebrow">Poor</span>
-        <span className="eyebrow">Excellent</span>
+        <span className="eyebrow">Fair</span>
+        <span className="eyebrow">Outstanding</span>
       </div>
     </fieldset>
   );

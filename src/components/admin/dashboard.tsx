@@ -448,7 +448,7 @@ export function AdminDashboard({
               <p className="mt-1 text-sm text-muted-foreground">
                 {isFinished
                   ? "This event is finished. Results below are final, and stay available here."
-                  : "Closes voting permanently and reveals the top 3 to the audience."}
+                  : "Closes voting permanently. Results stay private to this dashboard."}
               </p>
             </div>
             {isFinished ? (

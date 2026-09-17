@@ -70,7 +70,7 @@ if (MODE === "closed") {
 // between them, so the clicks are issued together rather than in sequence.
 const t0 = Date.now();
 const clicks = voters.map(({ page }) => {
-  const btn = page.getByRole("button", { name: /^Submit \d$/ });
+  const btn = page.getByRole("button", { name: /^Submit your vote$/i });
   return MODE === "double"
     ? btn.click({ timeout: 30000 }).then(() => btn.click({ timeout: 2000 }).catch(() => {}))
     : btn.click({ timeout: 30000 });
@@ -83,12 +83,12 @@ const outcomes = await Promise.all(
   voters.map(async ({ page }) => {
     try {
       await page
-        .locator("text=/Rating submitted|Already rated|Something went wrong|not open|no longer active|closed/i")
+        .locator("text=/Thank you for voting|Already voted|Something went wrong|not open|no longer on stage|closed/i")
         .first()
         .waitFor({ timeout: 30000 });
       const body = await page.locator("main").innerText();
-      if (/Rating submitted/i.test(body)) return "submitted";
-      if (/Already rated/i.test(body)) return "already_rated";
+      if (/Thank you for voting/i.test(body)) return "submitted";
+      if (/Already voted/i.test(body)) return "already_rated";
       if (/closed/i.test(body)) return "voting_closed";
       if (/not open/i.test(body)) return "voting_not_open";
       return "error_shown";

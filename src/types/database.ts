@@ -171,10 +171,6 @@ export interface Database {
           average_rating: number | null;
         }[];
       };
-      get_public_top3: {
-        Args: { p_event_id: string };
-        Returns: { rank: number; name: string }[];
-      };
       is_admin: {
         Args: Record<string, never>;
         Returns: boolean;

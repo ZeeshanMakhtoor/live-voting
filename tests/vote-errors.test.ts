@@ -10,7 +10,7 @@ import {
 // supabase-js hands us exactly these strings on error.message.
 describe("vote error mapping", () => {
   it("explains a duplicate vote rather than showing a generic failure", () => {
-    expect(friendlyVoteError("ALREADY_VOTED")).toMatch(/already rated/i);
+    expect(friendlyVoteError("ALREADY_VOTED")).toMatch(/already voted/i);
   });
 
   it("maps every sentinel cast_vote can raise to specific copy", () => {
