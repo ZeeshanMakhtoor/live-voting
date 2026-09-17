@@ -14,9 +14,9 @@ select id, name, batch, year, display_order, 'upcoming'
 from public.events
 cross join (
   values
-    ('Aisha Khan', 'BTech CSE', '2028', 1),
-    ('Rahul Verma', 'BTech CSE', '2027', 2),
-    ('Zoya Ahmed', 'BTech ECE', '2028', 3),
-    ('Daniel Lee', 'BTech ECE', '2026', 4)
+    ('Aisha Khan', 'BTech CSE', '1st year', 1),
+    ('Rahul Verma', 'BTech CSE', '2nd year', 2),
+    ('Zoya Ahmed', 'BTech ECE', '3rd year', 3),
+    ('Daniel Lee', 'BTech ECE', '4th year', 4)
 ) as p(name, batch, year, display_order)
 where public.events.name = 'Literary Club — Dev Event';

@@ -16,8 +16,9 @@ unsure what to do, press that.
 **The day before**
 
 1. Sign in at `admin.yourdomain.com`.
-2. Create the event and add every participant — name is required, batch and year are
-   optional. They appear in the audience view under the performer's name.
+2. Create the event and add every participant. Name is required; batch is free text and
+   year is picked from 1st–4th year, both optional. They appear in the audience view
+   under the performer's name.
 3. **Verify the running order.** Use the ↑ / ↓ buttons in *Running order*. Getting this
    right now saves you fumbling on stage later.
 4. **Do a real test.** Open `yourdomain.com` on your own phone, start performer 1, open

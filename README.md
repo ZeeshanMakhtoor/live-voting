@@ -134,6 +134,7 @@ supabase db push
 | `0014` | `admin_delete_event`, which refuses to delete a live event |
 | `0015` | Removes the public results function |
 | `0016` | `has_voted`, so the audience app asks the database rather than trusting local storage |
+| `0017` | Year becomes a year of study picked from a list, not a typed graduation year |
 
 To verify a fresh database, run the business-logic suite (46 assertions; it creates a
 live event, so use a scratch database, not production):

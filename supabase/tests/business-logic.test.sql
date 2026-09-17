@@ -58,9 +58,9 @@ begin
   values ('TEST EVENT', 'draft', 'not_started') returning id into ev;
 
   insert into public.participants(event_id, name, batch, year, display_order, status)
-  values (ev,'Alpha','BTech CSE','2028',1,'upcoming') returning id into p1;
+  values (ev,'Alpha','BTech CSE','1st year',1,'upcoming') returning id into p1;
   insert into public.participants(event_id, name, batch, year, display_order, status)
-  values (ev,'Bravo','BTech ECE','2027',2,'upcoming') returning id into p2;
+  values (ev,'Bravo','BTech ECE','2nd year',2,'upcoming') returning id into p2;
   insert into public.participants(event_id, name, batch, year, display_order, status)
   values (ev,'Charlie',null,null,3,'upcoming') returning id into p3;
   insert into public.participants(event_id, name, batch, year, display_order, status)
@@ -73,8 +73,11 @@ begin
   perform pg_temp.check_raises('over-long participant name rejected',
     format('insert into public.participants(event_id,name,display_order) values (%L,%L,91)', ev, repeat('a',151)),
     'new row for relation "participants" violates check constraint "participants_name_length"');
-  perform pg_temp.check_raises('malformed year rejected',
-    format('insert into public.participants(event_id,name,year,display_order) values (%L,%L,%L,92)', ev, 'X', '28'),
+  perform pg_temp.check_raises('a year outside the offered options is rejected',
+    format('insert into public.participants(event_id,name,year,display_order) values (%L,%L,%L,92)', ev, 'X', '2028'),
+    'new row for relation "participants" violates check constraint "participants_year_format"');
+  perform pg_temp.check_raises('year is case sensitive against the offered options',
+    format('insert into public.participants(event_id,name,year,display_order) values (%L,%L,%L,94)', ev, 'X', '1st Year'),
     'new row for relation "participants" violates check constraint "participants_year_format"');
 
   insert into public.participants(event_id,name,batch,year,display_order)

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ParticipantRow, LeaderboardRow } from "./dashboard";
-import { validateParticipantInput } from "@/lib/participant-validation";
+import { PARTICIPANT_YEARS, validateParticipantInput } from "@/lib/participant-validation";
 
 interface ParticipantListProps {
   participants: ParticipantRow[];
@@ -255,13 +255,19 @@ function EditRow({
         />
       </td>
       <td className="px-2 py-2">
-        <input
+        <select
           value={year}
           onChange={(e) => setYear(e.target.value)}
-          maxLength={4}
-          inputMode="numeric"
+          aria-label={`Year of study for ${participant.name}`}
           className="h-9 w-full border-2 border-foreground bg-background px-2 text-sm"
-        />
+        >
+          <option value="">—</option>
+          {PARTICIPANT_YEARS.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
       </td>
       <td colSpan={3} />
       <td className="px-3 py-2">
@@ -350,14 +356,18 @@ function AddParticipantForm({
       </label>
       <label className="flex flex-col gap-1">
         <span className="eyebrow">Year</span>
-        <input
+        <select
           value={year}
           onChange={(e) => setYear(e.target.value)}
-          placeholder="2028"
-          maxLength={4}
-          inputMode="numeric"
-          className="h-10 w-24 border-2 border-foreground bg-background px-2 text-sm"
-        />
+          className="h-10 w-36 border-2 border-foreground bg-background px-2 text-sm"
+        >
+          <option value="">—</option>
+          {PARTICIPANT_YEARS.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
       </label>
       <Button type="submit" variant="outline" disabled={busy || submitting || !name.trim()}>
         {submitting ? "Adding…" : "Add participant"}
