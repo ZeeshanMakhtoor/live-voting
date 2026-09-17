@@ -31,6 +31,10 @@ unsure what to do, press that.
 - Sign in to the admin app and leave it open. Confirm the header says **Live**, not
   *Reconnecting*.
 - Put `yourdomain.com` on a slide or a QR code the room can see.
+- **Publish exactly one URL and never a second one.** A voter's identity is stored per
+  domain, so someone who votes on one address and later opens a different one counts as
+  a new person and is offered the vote again. Pick one address, and use it on the slide,
+  the QR code and anything you send out.
 - Confirm the audience site shows **"Voting hasn't started yet."** — that's correct
   before you start performer 1.
 
@@ -116,7 +120,8 @@ event starts, never during.
 | **Reconnecting** in the header | It's recovering by itself. Your last action either applied or didn't — check the dashboard state before repeating it. |
 | A red error banner | The action **did not** apply. Read which one, then retry it. |
 | Audience says the screen is stuck | Ask them to pull-to-refresh. Their vote is safe — ratings are recorded server-side the moment they submit. |
-| Audience says "already rated" but they didn't | Someone else used that phone, or they voted and forgot. One rating per device per performer; this is working as intended. |
+| Audience says "already voted" but they didn't | Someone else used that phone, or they voted and forgot. One vote per device per performer; this is working as intended. |
+| Someone is offered a vote they already cast | They opened a different URL, cleared their site data, or switched browser — each of those is a new identity. Nothing is double-counted: the app just cannot recognise them. Keep to one URL to avoid the common case. |
 | Count is stuck at 0 with voting open | Check the audience site yourself on a phone. If it shows the right performer, people simply haven't voted yet. |
 | Dashboard won't load | Reload the page. If it still fails, sign in again. The event state lives in the database, not in the browser — nothing is lost. |
 | Venue WiFi collapses | Switch the laptop to your phone hotspot. The audience needs their own connections; nothing you can do from the dashboard. |

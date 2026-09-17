@@ -139,6 +139,9 @@ const server = http.createServer((req, res) => {
     if (p === "/auth/v1/user") return send(res, 200, { id: "admin", email: "a@b.c" }, req);
     if (p === "/auth/v1/token") return send(res, 200, { access_token: "t", refresh_token: "r", user: { id: "admin" } }, req);
     if (p === "/rest/v1/rpc/is_admin") return send(res, 200, true, req);
+    if (p === "/rest/v1/rpc/has_voted") {
+      return send(res, 200, state.votes.has(`${body.p_participant_id}|${body.p_voter_id}`), req);
+    }
     if (p === "/rest/v1/rpc/get_leaderboard") return send(res, 200, leaderboard(), req);
     if (p.startsWith("/rest/v1/rpc/")) return send(res, 200, null, req);
 

@@ -171,6 +171,10 @@ export interface Database {
           average_rating: number | null;
         }[];
       };
+      has_voted: {
+        Args: { p_participant_id: string; p_voter_id: string };
+        Returns: boolean;
+      };
       is_admin: {
         Args: Record<string, never>;
         Returns: boolean;

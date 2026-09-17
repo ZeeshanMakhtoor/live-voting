@@ -49,8 +49,16 @@ Admin laptop  ──┘         ↑                        │
                           └──── Realtime ──────────┘  (refetch trigger only)
 ```
 
-Anonymous voters are identified by a random ID in `localStorage`. It is a convenience,
-never a trust boundary — the unique index is what actually stops double voting.
+Anonymous voters are identified by a random ID kept in **both** `localStorage` and a
+cookie, because browsers evict the two independently. Whichever survives restores the
+other. On load the app also asks the database (`has_voted`) whether this voter already
+voted for the performer on stage, so the "already voted" screen does not depend on
+local storage surviving.
+
+That ID is a convenience, never a trust boundary — the unique index is what actually
+stops double voting. A voter who clears **both** stores, or opens the site in a
+different browser, is a new person as far as anything can tell. That is inherent to
+anonymous voting; see *Deliberate limits*.
 
 ## 3. Local setup
 
@@ -124,7 +132,8 @@ supabase db push
 | `0012` | Admin allowlist (`admin_users` + `is_admin()`) |
 | `0013` | Tightens function grants on the anon-callable surface |
 | `0014` | `admin_delete_event`, which refuses to delete a live event |
-| `0015` | Removes the public results function; `cast_vote` is the only anon-callable function |
+| `0015` | Removes the public results function |
+| `0016` | `has_voted`, so the audience app asks the database rather than trusting local storage |
 
 To verify a fresh database, run the business-logic suite (46 assertions; it creates a
 live event, so use a scratch database, not production):

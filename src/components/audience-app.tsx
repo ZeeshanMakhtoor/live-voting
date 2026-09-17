@@ -132,6 +132,35 @@ export function AudienceApp({ initialEvent, initialParticipant }: AudienceAppPro
     setErrorMessage(null);
   }, [participantId]);
 
+  // The local cache above is only a head start. It is lost whenever the
+  // browser drops site data — cleared storage, an in-app browser, an OS
+  // eviction — and someone reopening the link would then be shown the
+  // voting form for a performer they had already voted for. So ask the
+  // database, which is the only thing that actually knows.
+  //
+  // This can only move the screen from "not voted" to "voted", never the
+  // other way: the local record is written solely after the database
+  // confirms a vote, so if the two disagree the cautious reading is that
+  // the vote exists.
+  useEffect(() => {
+    if (!participantId || !voterId) return;
+    let cancelled = false;
+
+    void (async () => {
+      const { data, error } = await supabase.rpc("has_voted", {
+        p_participant_id: participantId,
+        p_voter_id: voterId,
+      });
+      if (cancelled || error || !data) return;
+      markVotedFor(participantId);
+      setVotedReason((current) => current ?? "submitted");
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [participantId, voterId, supabase]);
+
   async function handleSubmit() {
     if (!participant || !voterId || rating === null || submitState === "submitting") return;
 

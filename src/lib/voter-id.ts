@@ -1,18 +1,19 @@
 const STORAGE_KEY = "lcv_voter_id";
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 180; // 180 days
 
 /**
  * Persistent anonymous voter id. Random (crypto, not sequential/guessable),
- * stored in localStorage so it survives refreshes for the same browser.
- * This is a convenience identity only — the database never trusts it
- * alone; the unique constraint on votes is the real enforcement.
+ * and written to BOTH localStorage and a cookie.
  *
- * Every browser API used here can fail on a real audience device:
- * localStorage throws outright when site data is blocked (iOS Lockdown
- * Mode, "block all cookies", some in-app browsers), and crypto.randomUUID
- * is missing on non-secure origins and older Safari. None of that should
- * cost someone their vote, so each step degrades instead of throwing: a
- * session-scoped id still satisfies the database's uniqueness rule for as
- * long as the page is open, which is the whole window in which they vote.
+ * Two stores rather than one because browsers evict them independently:
+ * "clear site data" in some browsers drops localStorage but not cookies,
+ * iOS evicts script-writable storage on its own schedule, and an in-app
+ * browser may expose one and not the other. Losing this id means the voter
+ * is treated as a new person and is offered a vote they already cast, so
+ * it is worth reading from either and writing to both.
+ *
+ * This is still a convenience identity, never a trust boundary — the unique
+ * index on votes is what actually enforces one vote per voter.
  */
 let memoryId: string | null = null;
 
@@ -35,27 +36,61 @@ function randomId(): string {
     .slice(2, 12)}`.slice(0, 48);
 }
 
+/** Only ids this app could have produced; anything else is treated as absent. */
+const VALID = /^[A-Za-z0-9_-]{16,64}$/;
+
+function readLocalStorage(): string | null {
+  try {
+    const v = window.localStorage.getItem(STORAGE_KEY);
+    return v && VALID.test(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function readCookie(): string | null {
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)lcv_voter_id=([^;]*)/);
+    if (!match) return null;
+    const raw = match[1];
+    if (!raw) return null;
+    const v = decodeURIComponent(raw);
+    return VALID.test(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function persist(id: string): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Storage unwritable; the cookie below may still carry it.
+  }
+  try {
+    const secure = window.location.protocol === "https:" ? "; secure" : "";
+    document.cookie = `${STORAGE_KEY}=${encodeURIComponent(id)}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax${secure}`;
+  } catch {
+    // Cookies unwritable; localStorage above may still carry it.
+  }
+}
+
 export function getVoterId(): string {
   if (typeof window === "undefined") {
     throw new Error("getVoterId() must be called in the browser");
   }
 
-  try {
-    const existing = window.localStorage.getItem(STORAGE_KEY);
-    if (existing) return existing;
-  } catch {
-    // Storage unreadable — fall back to the in-memory id below.
+  const existing = readLocalStorage() ?? readCookie();
+  if (existing) {
+    // Re-persist so a store that lost it is repopulated from the one that
+    // kept it, instead of the id surviving in only one place.
+    persist(existing);
+    return existing;
   }
 
   if (!memoryId) {
     memoryId = randomId();
   }
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, memoryId);
-  } catch {
-    // Storage unwritable; the in-memory id carries this page session.
-  }
-
+  persist(memoryId);
   return memoryId;
 }
