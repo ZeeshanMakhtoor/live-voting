@@ -30,7 +30,8 @@ unsure what to do, press that.
 - Laptop charged and plugged in. Phone hotspot ready as a WiFi backup.
 - Sign in to the admin app and leave it open. Confirm the header says **Live**, not
   *Reconnecting*.
-- Put `yourdomain.com` on a slide or a QR code the room can see.
+- Put the QR code (`qr-out/vote-poster.png`) on a slide, or print it and put copies on
+  the tables. The poster also prints the address in text for anyone who can't scan.
 - **Publish exactly one URL and never a second one.** A voter's identity is stored per
   domain, so someone who votes on one address and later opens a different one counts as
   a new person and is offered the vote again. Pick one address, and use it on the slide,

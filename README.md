@@ -265,6 +265,21 @@ where participant_id = (select active_participant_id from public.events where st
 select * from public.get_leaderboard('<event-id>');
 ```
 
+## Audience QR code
+
+```bash
+node scripts/qr/make-qr.mjs https://your-address
+```
+
+Writes `qr-out/vote-qr.svg` and `qr-out/vote-poster.html` — open the poster and print
+it, or screenshot it for a slide. Error correction is level H, so it still scans when
+projected, photographed at an angle, or partly obscured.
+
+**Regenerate it if the address ever changes, and circulate exactly one address.** A
+voter's identity is stored per domain, so someone who arrives on a different hostname
+counts as a new person and is offered a vote they already cast. A Vercel project has
+several `.vercel.app` hostnames by default; pick one and use it everywhere.
+
 ## Browser support
 
 Verified in Chromium. Firefox and WebKit could not be run in the environment
