@@ -327,12 +327,33 @@ export function AdminDashboard({
     leaderboard.find((s) => s.participant_id === event.active_participant_id) ?? null;
   const totalRatings = leaderboard.reduce((sum, s) => sum + s.vote_count, 0);
   const remaining = participants.filter((p) => p.status === "upcoming").length;
+  // admin_next_participant only ever moves FORWARD through the running order,
+  // and ignores anyone already completed, skipped or removed. Mirror that rule
+  // exactly (including its -1 when nobody is on stage) so the dashboard never
+  // offers a move the database is going to refuse with NO_MORE_PARTICIPANTS.
+  const hasNextParticipant = participants.some(
+    (p) =>
+      p.display_order > (activeParticipant?.display_order ?? -1) &&
+      p.status !== "completed" &&
+      p.status !== "skipped" &&
+      p.status !== "removed",
+  );
   const counts = {
     total: participants.filter((p) => p.status !== "removed").length,
     completed: participants.filter((p) => p.status === "completed").length,
     skipped: participants.filter((p) => p.status === "skipped").length,
   };
   const isFinished = event.status === "finished";
+
+  const handleFinishEvent = () => {
+    if (
+      !window.confirm(
+        "Are you sure you want to finish this event? Voting will no longer be available.",
+      )
+    )
+      return;
+    void callRpc("finishEvent", "admin_finish_event", { p_event_id: event.id });
+  };
 
   return (
     <div className="min-h-viewport">
@@ -353,6 +374,8 @@ export function AdminDashboard({
           activeParticipant={activeParticipant}
           activeScore={activeScore}
           busy={busy}
+          hasNextParticipant={hasNextParticipant}
+          onFinish={handleFinishEvent}
           onNext={() =>
             void callRpc("nextParticipant", "admin_next_participant", { p_event_id: event.id })
           }
@@ -456,19 +479,7 @@ export function AdminDashboard({
                 Start a new event
               </Button>
             ) : (
-              <Button
-                variant="destructive"
-                disabled={busy}
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      "Are you sure you want to finish this event? Voting will no longer be available.",
-                    )
-                  )
-                    return;
-                  void callRpc("finishEvent", "admin_finish_event", { p_event_id: event.id });
-                }}
-              >
+              <Button variant="destructive" disabled={busy} onClick={handleFinishEvent}>
                 Finish event
               </Button>
             )}
@@ -607,6 +618,8 @@ function StagePanel({
   activeParticipant,
   activeScore,
   busy,
+  hasNextParticipant,
+  onFinish,
   onNext,
   onPrevious,
   onSkipCurrent,
@@ -618,6 +631,8 @@ function StagePanel({
   activeParticipant: ParticipantRow | null;
   activeScore: LeaderboardRow | null;
   busy: boolean;
+  hasNextParticipant: boolean;
+  onFinish: () => void;
   onNext: () => void;
   onPrevious: () => void;
   onSkipCurrent: () => void;
@@ -630,17 +645,23 @@ function StagePanel({
 
   // Exactly one recommended next step, derived from current state, so the
   // admin never has to work out which of six buttons applies right now.
+  // When nobody is left ahead in the running order, "Next performer" can only
+  // fail, so the recommended step becomes finishing the event instead.
   const primary = isFinished
     ? null
     : !activeParticipant
-      ? { label: "Start next performer", onClick: onNext }
+      ? hasNextParticipant
+        ? { label: "Start next performer", onClick: onNext }
+        : { label: "Finish event", onClick: onFinish }
       : event.voting_state === "not_started"
         ? { label: "Open voting", onClick: onOpenVoting }
         : event.voting_state === "open"
           ? { label: "Close voting", onClick: onCloseVoting }
           : event.voting_state === "paused"
             ? { label: "Resume voting", onClick: onOpenVoting }
-            : { label: "Next performer", onClick: onNext };
+            : hasNextParticipant
+              ? { label: "Next performer", onClick: onNext }
+              : { label: "Finish event", onClick: onFinish };
 
   return (
     <section className="border-[3px] border-foreground">
@@ -715,12 +736,20 @@ function StagePanel({
                 Close voting
               </Button>
             )}
-            {activeParticipant && event.voting_state === "closed" && (
+            {activeParticipant && event.voting_state === "closed" && hasNextParticipant && (
               <Button variant="outline" size="sm" disabled={busy} onClick={onNext}>
                 Next performer
               </Button>
             )}
           </div>
+
+          {!hasNextParticipant && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Everyone further down the running order has already performed. To run someone
+              again, press <span className="font-bold text-foreground">Start</span> on their row
+              below.
+            </p>
+          )}
         </div>
       )}
     </section>
